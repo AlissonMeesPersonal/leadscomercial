@@ -65,8 +65,24 @@ function normalizeWhatsApp(value: string) {
   return digits;
 }
 
-function leadKey(lead: Pick<Lead, "whatsapp" | "email">) {
-  return (normalizeWhatsApp(lead.whatsapp) || lead.email.toLowerCase().trim()).trim();
+function leadKey(
+  lead: Pick<Lead, "whatsapp" | "email" | "nome" | "cidade">
+) {
+  const phone = normalizeWhatsApp(lead.whatsapp);
+  if (phone) return `phone:${phone}`;
+
+  const email = lead.email.toLowerCase().trim();
+  if (email) return `email:${email}`;
+
+  // Inadimplentes muitas vezes não possuem telefone/e-mail.
+  // Nesse caso usamos nome + cidade para identificar o registro
+  // dentro da carteira e do tipo de demanda.
+  const name = normalizeHeader(lead.nome).replace(/\s+/g, " ");
+  const city = normalizeHeader(lead.cidade).replace(/\s+/g, " ");
+
+  if (name) return `name:${name}|city:${city || "sem-cidade"}`;
+
+  return "";
 }
 
 function dbToLead(row: DbLead): Lead {
@@ -803,7 +819,7 @@ export default function DashboardPage() {
         <div>
           <strong>Importe sua demanda</strong>
           <p>
-            Escolha o tipo antes de selecionar o arquivo. Como nome, telefone e cidade podem ser iguais, a categoria é definida pelo botão de importação.
+            Escolha o tipo antes de selecionar o arquivo. Inadimplentes podem ser importados mesmo sem telefone: nesse caso o sistema organiza por nome, cidade, responsável e tipo de demanda.
           </p>
         </div>
 
@@ -915,7 +931,11 @@ export default function DashboardPage() {
                         {new Date(lead.criadoEm).toLocaleDateString("pt-BR")}
                       </small>
                     </td>
-                    <td>{lead.whatsapp || "—"}</td>
+                    <td>
+                      {lead.whatsapp || (
+                        <span className="no-phone">Sem telefone</span>
+                      )}
+                    </td>
                     <td>{lead.cidade || "—"}</td>
                     <td>
                       <span className={`demand-pill ${lead.tipo}`}>
