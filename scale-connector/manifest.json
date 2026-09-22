@@ -1,11 +1,15 @@
 {
   "manifest_version": 3,
   "name": "Leads Comercial → Scale",
-  "version": "1.5.0",
-  "description": "Automatiza o fluxo do Scale Sales com seleção segura da unidade Santa Cruz e abertura de Nova Conversa.",
+  "version": "2.0.0",
+  "description": "Envia leads ao Scale sem alterar a URL e automatiza o fluxo Chat Unidades → Santa Cruz → Nova Conversa.",
+  "permissions": ["storage"],
   "content_scripts": [
     {
-      "matches": ["https://scale.26fit.com.br/*"],
+      "matches": [
+        "https://leadscomercial.vercel.app/*",
+        "https://scale.26fit.com.br/*"
+      ],
       "js": ["content.js"],
       "run_at": "document_idle"
     }
