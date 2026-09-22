@@ -248,6 +248,10 @@ input:focus, select:focus {
   gap: 14px;
 }
 
+.metrics.metrics-five {
+  grid-template-columns: repeat(5, 1fr);
+}
+
 .metrics article {
   background: var(--card);
   border: 1px solid var(--line);
@@ -305,6 +309,58 @@ html[data-theme="light"] .import-box {
   gap: 12px;
   padding: 16px;
   border-bottom: 1px solid var(--line);
+}
+
+.filters.filters-demand {
+  grid-template-columns: minmax(230px, 1fr) repeat(4, minmax(150px, 190px));
+}
+
+.import-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.import-actions select {
+  min-width: 190px;
+  background: #15181e;
+  color: white;
+  border-color: #373d47;
+}
+
+html[data-theme="light"] .import-actions select {
+  background: #ffffff;
+  color: #16181d;
+  border-color: #d9dde5;
+}
+
+.demand-table {
+  min-width: 1320px;
+}
+
+.demand-pill {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 6px 9px;
+  font-size: 11px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.demand-pill.opportunity {
+  background: var(--blue-soft);
+  color: #7198ff;
+}
+
+html[data-theme="light"] .demand-pill.opportunity {
+  color: #315ca8;
+}
+
+.demand-pill.delinquent {
+  background: var(--danger-soft);
+  color: var(--danger);
 }
 
 .table-wrap {
@@ -566,12 +622,20 @@ html[data-theme="light"] .mail-btn {
   .topbar-actions .ghost-btn {
     flex: 1;
   }
-  .metrics {
+  .metrics,
+  .metrics.metrics-five {
     grid-template-columns: repeat(2, 1fr);
   }
   .import-box {
     align-items: flex-start;
     flex-direction: column;
+  }
+  .import-actions {
+    width: 100%;
+  }
+  .import-actions select,
+  .import-actions .secondary-btn {
+    flex: 1;
   }
   .filters {
     grid-template-columns: 1fr;
