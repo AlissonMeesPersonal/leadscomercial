@@ -417,7 +417,9 @@ export default function AdminPage() {
             <tbody>
               {users.map((user) => {
                 const unit = user.unit_id ? unitById.get(user.unit_id) : null;
-                const isPrimary = user.username.toLowerCase() === "alisson";
+                const normalizedUsername = user.username.toLowerCase();
+                const isPrimary = normalizedUsername === "alisson";
+                const isCommercialSector = normalizedUsername === "comercial";
 
                 return (
                   <tr key={user.id}>
@@ -439,7 +441,7 @@ export default function AdminPage() {
                     </td>
                     <td>
                       <div className="row-actions">
-                        {!isPrimary && (
+                        {!isPrimary && !isCommercialSector && (
                           <>
                             <button
                               className="secondary-btn compact-action"
@@ -457,7 +459,8 @@ export default function AdminPage() {
                             </button>
                           </>
                         )}
-                        {isPrimary && <small>Usuário principal</small>}
+                        {isPrimary && <small>Administrador principal</small>}
+                        {isCommercialSector && <small>Acesso fixo do Setor Comercial</small>}
                       </div>
                     </td>
                   </tr>
