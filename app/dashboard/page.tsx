@@ -271,33 +271,98 @@ export default function DashboardPage() {
   }, [leads, query, statusFilter, cityFilter]);
 
   async function addImported(items: Lead[]) {
-    const seen = new Set(leads.map(leadKey).filter(Boolean));
-    const fresh = items.filter((lead) => {
-      const key = leadKey(lead);
-      if (!key || seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
+    const existingByKey = new Map(
+      leads
+        .map((lead) => [leadKey(lead), lead] as const)
+        .filter(([key]) => Boolean(key))
+    );
 
-    if (!fresh.length) {
-      setNotice("Nenhum lead novo foi encontrado.");
+    const fresh: Lead[] = [];
+    const cityUpdates = new Map<string, string[]>();
+
+    for (const imported of items) {
+      const key = leadKey(imported);
+      if (!key) continue;
+
+      const existing = existingByKey.get(key);
+
+      if (!existing) {
+        existingByKey.set(key, imported);
+        fresh.push(imported);
+        continue;
+      }
+
+      const importedCity = imported.cidade.trim();
+      const existingCity = existing.cidade.trim();
+
+      if (importedCity && !existingCity && !existing.id.startsWith("teste-")) {
+        const ids = cityUpdates.get(importedCity) || [];
+        ids.push(existing.id);
+        cityUpdates.set(importedCity, ids);
+      }
+    }
+
+    let added = 0;
+    let enriched = 0;
+
+    if (fresh.length) {
+      const response = await supabaseRequest(
+        "/rest/v1/commercial_leads?select=id,name,whatsapp,email,city,source,status,created_at",
+        {
+          method: "POST",
+          headers: { Prefer: "return=representation" },
+          body: JSON.stringify(fresh.map(toDbLead))
+        }
+      );
+
+      const savedRows = (await response.json()) as DbLead[];
+      const saved = savedRows.map(dbToLead);
+      added = saved.length;
+
+      setLeads((current) => [...saved, ...current]);
+    }
+
+    // Se o lead já existia, a reimportação serve para completar a cidade
+    // sem criar uma segunda cópia do mesmo contato.
+    for (const [city, ids] of cityUpdates) {
+      for (let index = 0; index < ids.length; index += 40) {
+        const chunk = ids.slice(index, index + 40);
+        const idFilter = chunk.map((id) => `"${id}"`).join(",");
+
+        const response = await supabaseRequest(
+          `/rest/v1/commercial_leads?id=in.(${encodeURIComponent(idFilter)})&select=id,name,whatsapp,email,city,source,status,created_at`,
+          {
+            method: "PATCH",
+            headers: { Prefer: "return=representation" },
+            body: JSON.stringify({ city })
+          }
+        );
+
+        const updatedRows = (await response.json()) as DbLead[];
+        enriched += updatedRows.length;
+
+        if (updatedRows.length) {
+          const updates = new Map(
+            updatedRows.map((row) => [row.id, dbToLead(row)] as const)
+          );
+
+          setLeads((current) =>
+            current.map((lead) => updates.get(lead.id) || lead)
+          );
+        }
+      }
+    }
+
+    if (!added && !enriched) {
+      setNotice("Nenhum lead novo ou cidade nova foi encontrada.");
       return;
     }
 
-    const response = await supabaseRequest(
-      "/rest/v1/commercial_leads?select=id,name,whatsapp,email,city,source,status,created_at",
-      {
-        method: "POST",
-        headers: { Prefer: "return=representation" },
-        body: JSON.stringify(fresh.map(toDbLead))
-      }
-    );
+    const parts = [];
+    if (added) parts.push(`${added} novo(s) lead(s)`);
+    if (enriched) parts.push(`${enriched} lead(s) atualizado(s) com cidade`);
 
-    const savedRows = (await response.json()) as DbLead[];
-    const saved = savedRows.map(dbToLead);
-
-    setLeads((current) => [...saved, ...current]);
-    setNotice(`${saved.length} lead(s) importado(s) e salvos no Supabase.`);
+    setNotice(parts.join(" · ") + ".");
   }
 
   async function handleFile(event: ChangeEvent<HTMLInputElement>) {
