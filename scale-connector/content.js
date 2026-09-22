@@ -12,7 +12,7 @@
 
   const digits = (value) => String(value || "").replace(/\D/g, "");
 
-  const INIT_KEY = "__lc_scale_connector_v24__";
+  const INIT_KEY = "__lc_scale_connector_v25__";
 
   if (window[INIT_KEY]) return;
   window[INIT_KEY] = true;
@@ -707,72 +707,71 @@
     }
 
     function nameInput() {
-      const inputs = modalInputs();
+      const modal = conversationModal();
+      if (!modal) return null;
 
-      const exact = inputs.find((input) => {
+      const inputs = [...modal.querySelectorAll("input")].filter(visible);
+
+      // O Scale usa "João Silva" como placeholder do campo Nome.
+      const byPlaceholder = inputs.find((input) => {
+        const placeholder = norm(input.getAttribute("placeholder"));
+        return placeholder === "joao silva" || placeholder.includes("joao silva");
+      });
+
+      if (byPlaceholder) return byPlaceholder;
+
+      const byNameHint = inputs.find((input) => {
         const hint = norm(
           [
-            input.getAttribute("placeholder"),
             input.getAttribute("aria-label"),
             input.getAttribute("name"),
             input.getAttribute("id")
-          ]
-            .filter(Boolean)
-            .join(" ")
+          ].filter(Boolean).join(" ")
         );
-
-        return (
-          hint.includes("joao silva") ||
-          hint.includes("nome")
-        );
+        return hint.includes("nome") || hint.includes("name");
       });
 
-      if (exact) return exact;
+      if (byNameHint) return byNameHint;
 
-      return (
-        findInputNearLabel(["nome", "nome (opcional)"]) ||
-        inputs[0] ||
-        null
-      );
+      return inputs[0] || null;
     }
 
     function phoneInput() {
-      const inputs = modalInputs();
+      const modal = conversationModal();
+      if (!modal) return null;
 
-      const exact = inputs.find((input) => {
+      const inputs = [...modal.querySelectorAll("input")].filter(visible);
+
+      // O Scale usa "11999998888" como placeholder do telefone.
+      const byPlaceholder = inputs.find((input) => {
+        const placeholder = digits(input.getAttribute("placeholder"));
+        return placeholder === "11999998888";
+      });
+
+      if (byPlaceholder) return byPlaceholder;
+
+      const byType = inputs.find((input) => input.type === "tel");
+      if (byType) return byType;
+
+      const byPhoneHint = inputs.find((input) => {
         const hint = norm(
           [
-            input.getAttribute("placeholder"),
             input.getAttribute("aria-label"),
             input.getAttribute("name"),
-            input.getAttribute("id"),
-            input.getAttribute("type")
-          ]
-            .filter(Boolean)
-            .join(" ")
+            input.getAttribute("id")
+          ].filter(Boolean).join(" ")
         );
-
         return (
-          hint.includes("11999998888") ||
           hint.includes("telefone") ||
+          hint.includes("phone") ||
           hint.includes("celular") ||
-          hint.includes("whatsapp") ||
-          input.type === "tel"
+          hint.includes("whatsapp")
         );
       });
 
-      if (exact) return exact;
+      if (byPhoneHint) return byPhoneHint;
 
-      return (
-        findInputNearLabel([
-          "telefone",
-          "telefone (com ddd)",
-          "celular",
-          "whatsapp"
-        ]) ||
-        inputs[1] ||
-        null
-      );
+      return inputs[1] || null;
     }
 
     function modalOpen() {
@@ -814,44 +813,47 @@
       try {
         input.focus();
 
-        try {
-          input.select?.();
-          document.execCommand?.("insertText", false, wanted);
-        } catch {}
+        const previous = String(input.value || "");
+        const nativeSetter = Object.getOwnPropertyDescriptor(
+          HTMLInputElement.prototype,
+          "value"
+        )?.set;
 
-        if (
-          String(input.value || "") !== wanted &&
-          digits(input.value) !== digits(wanted) &&
-          !norm(input.value).includes(norm(wanted))
-        ) {
-          const previous = input.value;
-          const proto = Object.getPrototypeOf(input);
-          const nativeSetter = Object.getOwnPropertyDescriptor(
-            proto,
-            "value"
-          )?.set;
-
-          if (nativeSetter) {
-            nativeSetter.call(input, wanted);
-          } else {
-            input.value = wanted;
-          }
-
-          try {
-            input._valueTracker?.setValue?.(previous);
-          } catch {}
-
-          dispatchFieldEvents(input, wanted);
+        // Primeiro atualiza o valor usando o setter nativo do browser,
+        // ignorando wrappers próprios do React/Scale.
+        if (nativeSetter) {
+          nativeSetter.call(input, wanted);
         } else {
-          dispatchFieldEvents(input, wanted);
+          input.value = wanted;
         }
 
-        input.dispatchEvent(
-          new KeyboardEvent("keyup", {
-            bubbles: true,
-            key: wanted.slice(-1) || "Unidentified"
-          })
-        );
+        // Faz React perceber que houve mudança real.
+        try {
+          input._valueTracker?.setValue?.(previous);
+        } catch {}
+
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+        input.dispatchEvent(new Event("change", { bubbles: true }));
+
+        // Segundo método: simula uma inserção de texto no próprio campo.
+        // Algumas bibliotecas de formulário só aceitam a mudança após seleção.
+        if (
+          String(input.value || "") !== wanted &&
+          digits(input.value) !== digits(wanted)
+        ) {
+          input.focus();
+          try {
+            input.setSelectionRange(0, String(input.value || "").length);
+          } catch {}
+
+          try {
+            document.execCommand("selectAll", false);
+            document.execCommand("insertText", false, wanted);
+          } catch {}
+
+          input.dispatchEvent(new Event("input", { bubbles: true }));
+          input.dispatchEvent(new Event("change", { bubbles: true }));
+        }
 
         return (
           String(input.value || "") === wanted ||
@@ -928,18 +930,17 @@
     }
 
     function validName(input) {
-      return Boolean(
-        input && norm(input.value).includes(norm(lead.nome))
-      );
+      if (!input || !lead.nome) return false;
+      return norm(input.value) === norm(lead.nome);
     }
 
     function validPhone(input) {
       if (!input) return false;
 
       const current = digits(input.value);
-      const expected = digits(lead.phone);
+      const expected = digits(lead.phone).slice(-11);
 
-      return current === expected || current.endsWith(expected);
+      return Boolean(current && current === expected);
     }
 
     function fillModal() {
