@@ -335,34 +335,41 @@
     );
   }
 
-  function unitPanelVisible() {
-    return Boolean(
-      findContains("h1,h2,h3,strong,span,div", [
-        ["chat", "por", "unidade"],
-        ["selecione", "uma", "unidade"],
-        ["selecione", "unidade"]
-      ])
-    );
+  function leafTextMatches(el, matcher) {
+    if (!visible(el)) return false;
+    if (el.children.length > 3) return false;
+    return matcher(norm(el.textContent));
   }
 
-  function santaCruzUnitRow() {
-    const exact = all("span,div,p,strong,a,button,[role=button],[tabindex]")
-      .filter((el) => {
-        if (!visible(el)) return false;
+  function unitPanelVisible() {
+    const heading = all("h1,h2,h3,h4,strong,span,p,div").find((el) => {
+      if (!leafTextMatches(el, (text) =>
+        text === "chat por unidade" ||
+        text === "selecione uma unidade" ||
+        text === "selecione unidade"
+      )) return false;
 
-        const txt = norm(el.textContent);
-        if (txt !== "santa cruz" && !txt.startsWith("santa cruz")) return false;
+      const r = el.getBoundingClientRect();
+      return r.left < window.innerWidth * 0.55 && r.top > 100;
+    });
+
+    return Boolean(heading);
+  }
+
+  function santaCruzUnitText() {
+    const matches = all("span,p,strong,div,a,button,[role=button],[tabindex]")
+      .filter((el) => {
+        if (!leafTextMatches(el, (text) => text === "santa cruz" || text.startsWith("santa cruz "))) {
+          return false;
+        }
 
         const r = el.getBoundingClientRect();
 
-        // Ignora o seletor da conta no canto superior direito.
-        if (r.top < 140 && r.left > window.innerWidth * 0.55) return false;
+        // Nunca usar o seletor da conta no topo direito.
+        if (r.top < 150 && r.left > window.innerWidth * 0.55) return false;
 
-        // A unidade da lista fica no painel esquerdo e abaixo do cabeçalho.
-        if (r.top < 150) return false;
-        if (r.left > window.innerWidth * 0.5) return false;
-
-        return true;
+        // A linha da unidade fica na metade esquerda, abaixo do cabeçalho.
+        return r.left < window.innerWidth * 0.55 && r.top > 140;
       })
       .map((el) => {
         const r = el.getBoundingClientRect();
@@ -370,7 +377,46 @@
       })
       .sort((a, b) => a.area - b.area);
 
-    return exact[0]?.el || null;
+    return matches[0]?.el || null;
+  }
+
+  function santaCruzUnitRow() {
+    const text = santaCruzUnitText();
+    if (!text) return null;
+
+    let current = text;
+    let best = clickable(text);
+
+    for (let depth = 0; current && depth < 7; depth += 1, current = current.parentElement) {
+      if (!visible(current)) continue;
+
+      const r = current.getBoundingClientRect();
+      const style = getComputedStyle(current);
+      const textValue = norm(current.textContent);
+
+      const plausibleRow =
+        r.left < window.innerWidth * 0.55 &&
+        r.top > 130 &&
+        r.width >= 110 &&
+        r.width <= 650 &&
+        r.height >= 32 &&
+        r.height <= 150 &&
+        textValue.includes("santa cruz");
+
+      if (!plausibleRow) continue;
+
+      if (
+        current.matches("button,a,[role=button],[tabindex]") ||
+        style.cursor === "pointer"
+      ) {
+        best = current;
+        break;
+      }
+
+      if (!best || best === text) best = current;
+    }
+
+    return best || text;
   }
 
   function clickSantaCruz() {
@@ -387,11 +433,23 @@
   }
 
   function santaCruzChatLoaded() {
-    return Boolean(
-      findContains("h1,h2,h3,strong,span,div", [
-        ["chat", "santa", "cruz"]
-      ])
-    );
+    const heading = all("h1,h2,h3,h4,strong,span,p,div").find((el) => {
+      if (!leafTextMatches(el, (text) =>
+        text === "chat - santa cruz" ||
+        text === "chat santa cruz" ||
+        text.startsWith("chat - santa cruz ")
+      )) return false;
+
+      const r = el.getBoundingClientRect();
+
+      // O título do chat deve estar na área de conteúdo, não no seletor da conta.
+      return r.left > 180 && r.top > 100 && r.top < window.innerHeight * 0.65;
+    });
+
+    if (heading) return true;
+
+    // Outra confirmação forte: o botão Nova Conversa só aparece após a unidade real carregar.
+    return Boolean(newConversationButton());
   }
 
   function newConversationButton() {
