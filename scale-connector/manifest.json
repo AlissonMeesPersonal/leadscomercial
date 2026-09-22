@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Leads Comercial → Scale",
-  "version": "2.2.0",
-  "description": "Detecta uma aba já aberta do Scale e preenche automaticamente o modal Nova Conversa quando disponível.",
+  "version": "2.3.0",
+  "description": "Detecta uma aba já aberta do Scale e preenche diretamente o modal Nova Conversa, inclusive campos controlados pelo React.",
   "permissions": ["storage", "tabs", "scripting"],
   "host_permissions": [
     "https://leadscomercial.vercel.app/*",
