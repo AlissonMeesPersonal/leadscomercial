@@ -213,33 +213,44 @@ export default function DashboardPage() {
     } catch {}
 
     updateStatus(lead.id, "Em contato");
-    setNotice(`Enviando ${lead.nome} para o conector do Scale…`);
+    setNotice(`Procurando uma aba do Scale para ${lead.nome}…`);
 
-    let opened = false;
+    let answered = false;
 
-    const openScale = () => {
-      if (opened) return;
-      opened = true;
-      window.removeEventListener("message", handleConnectorAck);
-      window.open(
-        "https://scale.26fit.com.br/d/at-unidades",
-        "_blank",
-        "noopener,noreferrer"
-      );
-      setNotice(`Scale aberto para ${lead.nome}. A automação continuará na nova aba.`);
-    };
-
-    const handleConnectorAck = (event: MessageEvent) => {
+    const handleConnectorResponse = (event: MessageEvent) => {
       if (
-        event.source === window &&
-        event.data?.source === "leads-scale-connector" &&
-        event.data?.type === "LEAD_SAVED"
+        event.source !== window ||
+        event.data?.source !== "leads-scale-connector" ||
+        event.data?.type !== "SCALE_DISPATCHED"
       ) {
-        openScale();
+        return;
       }
+
+      answered = true;
+      window.removeEventListener("message", handleConnectorResponse);
+
+      if (event.data?.ok === false) {
+        setNotice(
+          `O conector não conseguiu acessar o Scale. Abra o Scale e tente novamente.`
+        );
+        return;
+      }
+
+      if (event.data?.mode === "existing") {
+        setNotice(
+          event.data?.modalOpen
+            ? `Scale encontrado. Preenchendo o modal Nova Conversa de ${lead.nome}…`
+            : `Scale encontrado. Se o modal Nova Conversa estiver aberto, ele será preenchido automaticamente.`
+        );
+        return;
+      }
+
+      setNotice(
+        `Nenhuma aba do Scale estava aberta. O Scale foi aberto para ${lead.nome}.`
+      );
     };
 
-    window.addEventListener("message", handleConnectorAck);
+    window.addEventListener("message", handleConnectorResponse);
 
     window.postMessage(
       {
@@ -250,8 +261,20 @@ export default function DashboardPage() {
       window.location.origin
     );
 
-    // Fallback: se a extensão não responder, abre o Scale limpo mesmo assim.
-    setTimeout(openScale, 1200);
+    // Fallback para quando a extensão não estiver instalada/ativa.
+    setTimeout(() => {
+      if (answered) return;
+
+      window.removeEventListener("message", handleConnectorResponse);
+      window.open(
+        "https://scale.26fit.com.br/d/at-unidades",
+        "_blank",
+        "noopener,noreferrer"
+      );
+      setNotice(
+        `O conector não respondeu. Abri o Scale e deixei os dados de ${lead.nome} copiados para você.`
+      );
+    }, 1800);
   }
 
   async function logout() {
