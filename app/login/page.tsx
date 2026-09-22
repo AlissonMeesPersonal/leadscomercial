@@ -2,6 +2,7 @@
 
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
+import ThemeToggle from "../components/ThemeToggle";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -33,6 +34,10 @@ export default function LoginPage() {
 
   return (
     <main className="login-shell">
+      <div className="login-theme">
+        <ThemeToggle compact />
+      </div>
+
       <section className="login-card">
         <div className="brand-mark">LC</div>
         <p className="eyebrow">COMERCIAL</p>
