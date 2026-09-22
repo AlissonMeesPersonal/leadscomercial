@@ -12,6 +12,11 @@
 
   const digits = (value) => String(value || "").replace(/\D/g, "");
 
+  const INIT_KEY = "__lc_scale_connector_v22__";
+
+  if (window[INIT_KEY]) return;
+  window[INIT_KEY] = true;
+
   if (host === "leadscomercial.vercel.app") {
     window.addEventListener("message", async (event) => {
       if (
@@ -33,15 +38,46 @@
       try {
         await chrome.storage.local.set({ [LEAD_KEY]: lead });
 
+        const response = await new Promise((resolve) => {
+          chrome.runtime.sendMessage(
+            {
+              type: "LC_OPEN_OR_FILL_SCALE",
+              lead
+            },
+            (value) => {
+              const error = chrome.runtime.lastError;
+              resolve(
+                error
+                  ? { ok: false, error: error.message }
+                  : value || { ok: false }
+              );
+            }
+          );
+        });
+
         window.postMessage(
           {
             source: "leads-scale-connector",
-            type: "LEAD_SAVED"
+            type: "SCALE_DISPATCHED",
+            ok: response?.ok !== false,
+            mode: response?.mode || null,
+            modalOpen: Boolean(response?.modalOpen),
+            error: response?.error || null
           },
           window.location.origin
         );
       } catch (error) {
-        console.error("[Leads Comercial] Falha ao salvar lead para o Scale:", error);
+        console.error("[Leads Comercial] Falha ao enviar lead para o Scale:", error);
+
+        window.postMessage(
+          {
+            source: "leads-scale-connector",
+            type: "SCALE_DISPATCHED",
+            ok: false,
+            error: error instanceof Error ? error.message : String(error)
+          },
+          window.location.origin
+        );
       }
     });
 
@@ -49,6 +85,75 @@
   }
 
   if (host !== "scale.26fit.com.br") return;
+
+  let stopActiveRun = null;
+
+  function modalLooksOpen() {
+    const pageText = norm(document.body?.innerText || "");
+    if (!pageText.includes("nova conversa")) return false;
+
+    return Array.from(document.querySelectorAll("input")).some((input) => {
+      const hint = norm(
+        [
+          input.getAttribute("placeholder"),
+          input.getAttribute("aria-label"),
+          input.getAttribute("name")
+        ]
+          .filter(Boolean)
+          .join(" ")
+      );
+
+      return (
+        hint.includes("joao silva") ||
+        hint.includes("nome") ||
+        hint.includes("11999998888") ||
+        hint.includes("telefone")
+      );
+    });
+  }
+
+  function runLead(inputLead) {
+    const lead = {
+      nome: String(inputLead?.nome || "").trim(),
+      ddi: digits(inputLead?.ddi || "55"),
+      phone: digits(inputLead?.phone || ""),
+      createdAt: Number(inputLead?.createdAt || Date.now())
+    };
+
+    if (!lead.phone) return false;
+
+    if (typeof stopActiveRun === "function") {
+      try {
+        stopActiveRun();
+      } catch {}
+    }
+
+    stopActiveRun = startAutomation(lead);
+    return true;
+  }
+
+  chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+    if (message?.type !== "LC_FILL_SCALE_LEAD") return;
+
+    const lead = message.lead || {};
+    const modalOpen = modalLooksOpen();
+
+    chrome.storage.local.set({
+      [LEAD_KEY]: {
+        nome: String(lead.nome || "").trim(),
+        ddi: digits(lead.ddi || "55"),
+        phone: digits(lead.phone || ""),
+        createdAt: Date.now()
+      }
+    });
+
+    const ok = runLead(lead);
+
+    sendResponse({
+      ok,
+      modalOpen
+    });
+  });
 
   chrome.storage.local.get([LEAD_KEY], (result) => {
     const lead = result?.[LEAD_KEY];
@@ -60,7 +165,7 @@
       return;
     }
 
-    startAutomation(lead);
+    runLead(lead);
   });
 
   function startAutomation(lead) {
@@ -869,7 +974,9 @@
     }
 
     showToast(
-      "Lead recebido. Aguardando o Scale carregar com a URL limpa…"
+      modalLooksOpen()
+        ? "Nova Conversa detectada. Preenchendo o lead agora…"
+        : "Lead recebido. Aguardando o Scale ficar pronto…"
     );
 
     const observer = new MutationObserver(() => step());
@@ -905,5 +1012,11 @@
     }, 500);
 
     step();
+
+    return () => {
+      finished = true;
+      clearInterval(timer);
+      observer.disconnect();
+    };
   }
 })();
