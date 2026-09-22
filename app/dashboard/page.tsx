@@ -274,7 +274,7 @@ export default function DashboardPage() {
   const [cityFilter, setCityFilter] = useState("Todas");
   const [typeFilter, setTypeFilter] = useState("Todos");
   const [ownerFilter, setOwnerFilter] = useState("Todos");
-  const [importType, setImportType] = useState<"auto" | DemandType>("auto");
+  const importTypeRef = useRef<DemandType>("opportunity");
   const [notice, setNotice] = useState("");
   const [processing, setProcessing] = useState(false);
   const [sessionInfo, setSessionInfo] = useState<SessionInfo | null>(null);
@@ -337,6 +337,15 @@ export default function DashboardPage() {
     [owners]
   );
 
+  const currentOwnerId = useMemo(() => {
+    const username = sessionInfo?.username.toLowerCase();
+    if (!username) return null;
+
+    return (
+      owners.find((owner) => owner.username.toLowerCase() === username)?.id || null
+    );
+  }, [owners, sessionInfo]);
+
   const cities = useMemo(
     () =>
       Array.from(
@@ -382,9 +391,18 @@ export default function DashboardPage() {
   }, [leads, query, statusFilter, cityFilter, typeFilter, ownerFilter, ownerById]);
 
   async function addImported(items: Lead[]) {
+    const scopeKey = (lead: Lead, ownerId: string | null) => {
+      const contact = leadKey(lead);
+      if (!contact) return "";
+      return `${ownerId || "__current__"}|${lead.tipo}|${contact}`;
+    };
+
     const existingByKey = new Map(
       leads
-        .map((lead) => [leadKey(lead), lead] as const)
+        .map((lead) => [
+          scopeKey(lead, lead.ownerUserId),
+          lead
+        ] as const)
         .filter(([key]) => Boolean(key))
     );
 
@@ -392,7 +410,7 @@ export default function DashboardPage() {
     const cityUpdates = new Map<string, string[]>();
 
     for (const imported of items) {
-      const key = leadKey(imported);
+      const key = scopeKey(imported, currentOwnerId);
       if (!key) continue;
 
       const existing = existingByKey.get(key);
@@ -477,9 +495,14 @@ export default function DashboardPage() {
 
     if (added) parts.push(`${added} registro(s) importado(s)`);
     if (enriched) parts.push(`${enriched} atualizado(s) com cidade`);
-    if (skipped) parts.push(`${skipped} duplicado(s) ignorado(s)`);
+    if (skipped) parts.push(`${skipped} duplicado(s) da mesma carteira ignorado(s)`);
 
     setNotice(parts.join(" · ") + ".");
+  }
+
+  function openImporter(type: DemandType) {
+    importTypeRef.current = type;
+    inputRef.current?.click();
   }
 
   async function handleFile(event: ChangeEvent<HTMLInputElement>) {
@@ -550,12 +573,10 @@ export default function DashboardPage() {
         );
       }
 
-      if (importType !== "auto") {
-        imported = imported.map((lead) => ({
-          ...lead,
-          tipo: importType
-        }));
-      }
+      imported = imported.map((lead) => ({
+        ...lead,
+        tipo: importTypeRef.current
+      }));
 
       await addImported(imported);
     } catch (err) {
@@ -735,10 +756,18 @@ export default function DashboardPage() {
 
           <button
             className="primary-btn small"
-            onClick={() => inputRef.current?.click()}
+            onClick={() => openImporter("opportunity")}
             disabled={processing || !loaded}
           >
-            {processing ? "Importando..." : "+ Importar"}
+            {processing ? "Importando..." : "+ Oportunidades"}
+          </button>
+
+          <button
+            className="delinquent-import-btn"
+            onClick={() => openImporter("delinquent")}
+            disabled={processing || !loaded}
+          >
+            + Inadimplentes
           </button>
 
           <button className="ghost-btn" onClick={logout}>
@@ -774,29 +803,25 @@ export default function DashboardPage() {
         <div>
           <strong>Importe sua demanda</strong>
           <p>
-            Cada usuário recebe somente os registros da própria importação. O Setor Comercial e o ADM mantêm a visão consolidada.
+            Escolha o tipo antes de selecionar o arquivo. Como nome, telefone e cidade podem ser iguais, a categoria é definida pelo botão de importação.
           </p>
         </div>
 
         <div className="import-actions">
-          <select
-            value={importType}
-            onChange={(event) =>
-              setImportType(event.target.value as "auto" | DemandType)
-            }
-            aria-label="Tipo da importação"
+          <button
+            className="primary-btn"
+            onClick={() => openImporter("opportunity")}
+            disabled={processing || !loaded}
           >
-            <option value="auto">Detectar pelo arquivo</option>
-            <option value="opportunity">Oportunidades</option>
-            <option value="delinquent">Inadimplentes</option>
-          </select>
+            Importar oportunidades
+          </button>
 
           <button
-            className="secondary-btn"
-            onClick={() => inputRef.current?.click()}
-            disabled={processing}
+            className="delinquent-import-btn"
+            onClick={() => openImporter("delinquent")}
+            disabled={processing || !loaded}
           >
-            Selecionar arquivo
+            Importar inadimplentes
           </button>
         </div>
       </section>
