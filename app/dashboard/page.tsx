@@ -204,22 +204,54 @@ export default function DashboardPage() {
   async function startScale(lead: Lead) {
     const full = normalizeWhatsApp(lead.whatsapp);
     const phone = full.startsWith("55") ? full.slice(2) : full;
-    const params = new URLSearchParams({
-      lc_auto: "1",
-      lc_nome: lead.nome,
-      lc_ddi: "55",
-      lc_phone: phone
-    });
-
-    const payload = `Nome: ${lead.nome}\nDDI: +55\nTelefone: ${phone}`;
+    const payload = { nome: lead.nome, ddi: "55", phone };
 
     try {
-      await navigator.clipboard.writeText(payload);
+      await navigator.clipboard.writeText(
+        `Nome: ${lead.nome}\nDDI: +55\nTelefone: ${phone}`
+      );
     } catch {}
 
     updateStatus(lead.id, "Em contato");
-    setNotice(`Abrindo o Scale para ${lead.nome}. Os dados também foram copiados.`);
-    window.open(`https://scale.26fit.com.br/d/at-unidades?${params.toString()}`, "_blank", "noopener,noreferrer");
+    setNotice(`Enviando ${lead.nome} para o conector do Scale…`);
+
+    let opened = false;
+
+    const openScale = () => {
+      if (opened) return;
+      opened = true;
+      window.removeEventListener("message", handleConnectorAck);
+      window.open(
+        "https://scale.26fit.com.br/d/at-unidades",
+        "_blank",
+        "noopener,noreferrer"
+      );
+      setNotice(`Scale aberto para ${lead.nome}. A automação continuará na nova aba.`);
+    };
+
+    const handleConnectorAck = (event: MessageEvent) => {
+      if (
+        event.source === window &&
+        event.data?.source === "leads-scale-connector" &&
+        event.data?.type === "LEAD_SAVED"
+      ) {
+        openScale();
+      }
+    };
+
+    window.addEventListener("message", handleConnectorAck);
+
+    window.postMessage(
+      {
+        source: "leads-comercial",
+        type: "START_SCALE_LEAD",
+        payload
+      },
+      window.location.origin
+    );
+
+    // Fallback: se a extensão não responder, abre o Scale limpo mesmo assim.
+    setTimeout(openScale, 1200);
   }
 
   async function logout() {
