@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Leads Comercial → Scale",
-  "version": "1.3.0",
-  "description": "Automatiza a navegação pelo menu de chats, Chat Unidades, Santa Cruz e Nova Conversa no Scale Sales.",
+  "version": "1.4.0",
+  "description": "Automatiza o fluxo do Scale Sales: menu de chats, Chat Unidades, Santa Cruz e Nova Conversa.",
   "content_scripts": [
     {
       "matches": ["https://scale.26fit.com.br/*"],
