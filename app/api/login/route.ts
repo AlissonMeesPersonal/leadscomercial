@@ -1,8 +1,21 @@
+import { pbkdf2Sync } from "node:crypto";
 import { NextResponse } from "next/server";
 import { createSession, CommercialSession } from "../../../lib/auth";
 
 const SUPABASE_URL = "https://efahamylmoueniflnvzl.supabase.co";
 const SUPABASE_KEY = "sb_publishable_TD903F8atFHoM64JbiEEFA_qhnm_PhI";
+const COMMERCIAL_ACCESS_SALT = "lc-supa-2026-7f4d2a9bc18e6d53";
+const COMMERCIAL_ACCESS_ITERATIONS = 310000;
+
+function deriveCommercialAccess(username: string, password: string) {
+  return pbkdf2Sync(
+    `${username}:${password}`,
+    COMMERCIAL_ACCESS_SALT,
+    COMMERCIAL_ACCESS_ITERATIONS,
+    32,
+    "sha256"
+  ).toString("hex");
+}
 type DbLoginRow = {
   user_id: string;
   username: string;
@@ -46,6 +59,51 @@ export async function POST(request: Request) {
       { error: "Informe usuário e senha." },
       { status: 400 }
     );
+  }
+
+  const expectedCommercialUser = process.env.COMERCIAL_USER;
+  const expectedCommercialPassword = process.env.COMERCIAL_PASSWORD;
+
+  if (username.toLowerCase() === "comercial") {
+    if (
+      !expectedCommercialUser ||
+      !expectedCommercialPassword ||
+      username !== expectedCommercialUser ||
+      password !== expectedCommercialPassword
+    ) {
+      return NextResponse.json(
+        { error: "Usuário ou senha inválidos." },
+        { status: 401 }
+      );
+    }
+
+    const session: CommercialSession = {
+      username: "comercial",
+      displayName: "Setor Comercial",
+      role: "commercial",
+      userId: "setor-comercial",
+      unitId: null,
+      unitName: null
+    };
+
+    const token = await createSession(session);
+    const response = NextResponse.json({
+      ok: true,
+      accessToken: deriveCommercialAccess(username, password),
+      role: session.role,
+      displayName: session.displayName,
+      unitName: session.unitName
+    });
+
+    response.cookies.set("lead_session", token, {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+      path: "/",
+      maxAge: 60 * 60 * 12
+    });
+
+    return response;
   }
 
   const dbUser = await databaseLogin(username, password);
