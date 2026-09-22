@@ -12,7 +12,7 @@
 
   const digits = (value) => String(value || "").replace(/\D/g, "");
 
-  const INIT_KEY = "__lc_scale_connector_v22__";
+  const INIT_KEY = "__lc_scale_connector_v23__";
 
   if (window[INIT_KEY]) return;
   window[INIT_KEY] = true;
