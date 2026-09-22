@@ -15,7 +15,12 @@ Depois:
 1. Entre no Leads Comercial.
 2. Clique em **Iniciar no Scale** no lead.
 3. O Scale abrirá.
-4. O conector tentará abrir **Nova Conversa** e preencher Nome, Brasil +55 e telefone.
-5. Revise os dados e clique em **Continuar** manualmente.
+4. O conector abre **Chat Unidades**, seleciona **Santa Cruz**, abre **Nova Conversa** e preenche Nome, Brasil +55 e telefone.
+5. Quando os dados estiverem válidos, ele avança em **Continuar** automaticamente.
 
-O clique final em Continuar é proposital, para o comercial conferir o contato antes de seguir para o template aprovado.
+### Atualização 2.1.0
+- Corrige clique duplicado que podia selecionar e desfazer a unidade.
+- Passa a clicar no cartão/linha real de **Santa Cruz**, e não apenas no texto.
+- Adiciona um clique de reforço por coordenada quando a interface do Scale interceptar o primeiro clique.
+
+Depois de atualizar os arquivos, abra `chrome://extensions` e clique em **Recarregar** na extensão antes de testar novamente.
