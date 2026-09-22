@@ -1,9 +1,13 @@
 {
   "manifest_version": 3,
   "name": "Leads Comercial → Scale",
-  "version": "2.3.0",
-  "description": "Detecta uma aba já aberta do Scale e preenche diretamente o modal Nova Conversa, inclusive campos controlados pelo React.",
-  "permissions": ["storage", "tabs", "scripting"],
+  "version": "2.4.0",
+  "description": "Detecta uma aba já aberta do Scale e preenche somente nome e telefone no modal Nova Conversa.",
+  "permissions": [
+    "storage",
+    "tabs",
+    "scripting"
+  ],
   "host_permissions": [
     "https://leadscomercial.vercel.app/*",
     "https://scale.26fit.com.br/*"
@@ -17,7 +21,9 @@
         "https://leadscomercial.vercel.app/*",
         "https://scale.26fit.com.br/*"
       ],
-      "js": ["content.js"],
+      "js": [
+        "content.js"
+      ],
       "run_at": "document_idle"
     }
   ]
