@@ -11,6 +11,7 @@ type Lead = {
   nome: string;
   whatsapp: string;
   email: string;
+  cidade: string;
   origem: string;
   status: Status;
   criadoEm: string;
@@ -28,6 +29,7 @@ type DbLead = {
   name: string;
   whatsapp: string | null;
   email: string | null;
+  city: string | null;
   source: string;
   status: Status;
   created_at: string;
@@ -53,6 +55,7 @@ function dbToLead(row: DbLead): Lead {
     nome: row.name || "",
     whatsapp: row.whatsapp || "",
     email: row.email || "",
+    cidade: row.city || "",
     origem: row.source || "Importação",
     status: row.status,
     criadoEm: row.created_at
@@ -64,6 +67,7 @@ function toDbLead(lead: Lead) {
     name: lead.nome.trim(),
     whatsapp: lead.whatsapp.trim() || null,
     email: lead.email.trim() || null,
+    city: (lead.cidade || "").trim() || null,
     source: lead.origem || "Importação",
     status: lead.status
   };
@@ -102,10 +106,20 @@ async function supabaseRequest(path: string, init: RequestInit = {}) {
   return response;
 }
 
+function normalizeHeader(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
 function firstValue(row: Record<string, unknown>, keys: string[]) {
   const entries = Object.entries(row);
-  for (const key of keys) {
-    const found = entries.find(([k]) => k.toLowerCase().trim().includes(key));
+  const normalizedKeys = keys.map(normalizeHeader);
+
+  for (const key of normalizedKeys) {
+    const found = entries.find(([k]) => normalizeHeader(k).includes(key));
     if (found && found[1] != null) return String(found[1]).trim();
   }
   return "";
@@ -117,6 +131,7 @@ function rowsToLeads(rows: Record<string, unknown>[], origem: string): Lead[] {
     nome: firstValue(row, ["nome", "name", "cliente", "lead", "contato"]),
     whatsapp: firstValue(row, ["whatsapp", "telefone", "celular", "phone", "fone"]),
     email: firstValue(row, ["email", "e-mail", "mail"]),
+    cidade: firstValue(row, ["cidade", "municipio", "município", "city", "localidade"]),
     origem,
     status: "Novo",
     criadoEm: new Date().toISOString()
@@ -143,6 +158,7 @@ function textToLeads(text: string, origem: string): Lead[] {
       nome,
       whatsapp: phones[0] || "",
       email: emails[0] || "",
+      cidade: "",
       origem,
       status: "Novo",
       criadoEm: new Date().toISOString()
@@ -157,6 +173,7 @@ export default function DashboardPage() {
   const [loaded, setLoaded] = useState(false);
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("Todos");
+  const [cityFilter, setCityFilter] = useState("Todas");
   const [notice, setNotice] = useState("");
   const [processing, setProcessing] = useState(false);
 
@@ -171,7 +188,7 @@ export default function DashboardPage() {
 
       try {
         const response = await supabaseRequest(
-          "/rest/v1/commercial_leads?select=id,name,whatsapp,email,source,status,created_at&order=created_at.desc"
+          "/rest/v1/commercial_leads?select=id,name,whatsapp,email,city,source,status,created_at&order=created_at.desc"
         );
         const rows = (await response.json()) as DbLead[];
         let remote = rows.map(dbToLead);
@@ -194,7 +211,7 @@ export default function DashboardPage() {
 
             if (missing.length) {
               const migrated = await supabaseRequest(
-                "/rest/v1/commercial_leads?select=id,name,whatsapp,email,source,status,created_at",
+                "/rest/v1/commercial_leads?select=id,name,whatsapp,email,city,source,status,created_at",
                 {
                   method: "POST",
                   headers: { Prefer: "return=representation" },
@@ -231,14 +248,27 @@ export default function DashboardPage() {
     };
   }, []);
 
+  const cities = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          leads
+            .map((lead) => lead.cidade.trim())
+            .filter(Boolean)
+        )
+      ).sort((a, b) => a.localeCompare(b, "pt-BR")),
+    [leads]
+  );
+
   const filtered = useMemo(() => {
     const q = query.toLowerCase();
     return leads.filter((lead) => {
-      const matches = [lead.nome, lead.whatsapp, lead.email, lead.origem].join(" ").toLowerCase().includes(q);
+      const matches = [lead.nome, lead.whatsapp, lead.email, lead.cidade, lead.origem].join(" ").toLowerCase().includes(q);
       const statusOk = statusFilter === "Todos" || lead.status === statusFilter;
-      return matches && statusOk;
+      const cityOk = cityFilter === "Todas" || lead.cidade === cityFilter;
+      return matches && statusOk && cityOk;
     });
-  }, [leads, query, statusFilter]);
+  }, [leads, query, statusFilter, cityFilter]);
 
   async function addImported(items: Lead[]) {
     const seen = new Set(leads.map(leadKey).filter(Boolean));
@@ -255,7 +285,7 @@ export default function DashboardPage() {
     }
 
     const response = await supabaseRequest(
-      "/rest/v1/commercial_leads?select=id,name,whatsapp,email,source,status,created_at",
+      "/rest/v1/commercial_leads?select=id,name,whatsapp,email,city,source,status,created_at",
       {
         method: "POST",
         headers: { Prefer: "return=representation" },
@@ -326,7 +356,7 @@ export default function DashboardPage() {
   async function updateStatus(id: string, status: Status) {
     try {
       const response = await supabaseRequest(
-        `/rest/v1/commercial_leads?id=eq.${encodeURIComponent(id)}&select=id,name,whatsapp,email,source,status,created_at`,
+        `/rest/v1/commercial_leads?id=eq.${encodeURIComponent(id)}&select=id,name,whatsapp,email,city,source,status,created_at`,
         {
           method: "PATCH",
           headers: { Prefer: "return=representation" },
@@ -470,7 +500,7 @@ export default function DashboardPage() {
       <section className="import-box">
         <div>
           <strong>Importe sua base de contatos</strong>
-          <p>Planilhas, CSV/TSV, PDF, DOCX, TXT e JSON. O sistema identifica nome, WhatsApp e e-mail quando presentes.</p>
+          <p>Planilhas, CSV/TSV, PDF, DOCX, TXT e JSON. O sistema identifica nome, WhatsApp, e-mail e cidade quando presentes.</p>
         </div>
         <button className="secondary-btn" onClick={() => inputRef.current?.click()} disabled={processing}>Selecionar arquivo</button>
       </section>
@@ -479,7 +509,11 @@ export default function DashboardPage() {
 
       <section className="leads-card">
         <div className="filters">
-          <input placeholder="Buscar por nome, telefone, e-mail ou origem..." value={query} onChange={(e) => setQuery(e.target.value)} />
+          <input placeholder="Buscar por nome, telefone, e-mail, cidade ou origem..." value={query} onChange={(e) => setQuery(e.target.value)} />
+          <select value={cityFilter} onChange={(e) => setCityFilter(e.target.value)}>
+            <option value="Todas">Todas as cidades</option>
+            {cities.map((city) => <option key={city} value={city}>{city}</option>)}
+          </select>
           <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
             <option>Todos</option>
             {statusList.map((s) => <option key={s}>{s}</option>)}
@@ -489,7 +523,7 @@ export default function DashboardPage() {
         <div className="table-wrap">
           <table>
             <thead>
-              <tr><th>Lead</th><th>WhatsApp</th><th>E-mail</th><th>Origem</th><th>Status</th><th>Ações</th></tr>
+              <tr><th>Lead</th><th>WhatsApp</th><th>E-mail</th><th>Cidade</th><th>Origem</th><th>Status</th><th>Ações</th></tr>
             </thead>
             <tbody>
               {filtered.map((lead) => {
@@ -500,6 +534,7 @@ export default function DashboardPage() {
                     <td><strong>{lead.nome || "Sem nome"}</strong><small>{new Date(lead.criadoEm).toLocaleDateString("pt-BR")}</small></td>
                     <td>{lead.whatsapp || "—"}</td>
                     <td>{lead.email || "—"}</td>
+                    <td>{lead.cidade || "—"}</td>
                     <td className="origin">{lead.origem}</td>
                     <td>
                       <select className="status-select" value={lead.status} onChange={(e) => void updateStatus(lead.id, e.target.value as Status)}>
@@ -517,7 +552,7 @@ export default function DashboardPage() {
                   </tr>
                 );
               })}
-              {!filtered.length && <tr><td colSpan={6} className="empty">Nenhum lead encontrado.</td></tr>}
+              {!filtered.length && <tr><td colSpan={7} className="empty">Nenhum lead encontrado.</td></tr>}
             </tbody>
           </table>
         </div>
