@@ -344,10 +344,10 @@ export default function AdminPage() {
               Senha inicial
               <input
                 type="password"
-                minLength={8}
+                minLength={6}
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
-                placeholder="Mínimo 8 caracteres"
+                placeholder="Mínimo 6 caracteres"
                 autoComplete="new-password"
                 required
               />
@@ -416,7 +416,7 @@ export default function AdminPage() {
             <tbody>
               {users.map((user) => {
                 const unit = user.unit_id ? unitById.get(user.unit_id) : null;
-                const isPrimary = user.username.toLowerCase() === "comercial";
+                const isPrimary = user.username.toLowerCase() === "alisson";
 
                 return (
                   <tr key={user.id}>
