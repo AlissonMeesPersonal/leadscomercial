@@ -655,14 +655,114 @@
       return null;
     }
 
+    function conversationModal() {
+      const direct = all('[role="dialog"],[aria-modal="true"]')
+        .filter((el) => {
+          if (!visible(el)) return false;
+          const text = norm(el.textContent);
+          return (
+            text.includes("nova conversa") &&
+            text.includes("telefone") &&
+            text.includes("continuar")
+          );
+        })
+        .sort((a, b) => {
+          const ar = a.getBoundingClientRect();
+          const br = b.getBoundingClientRect();
+          return ar.width * ar.height - br.width * br.height;
+        })[0];
+
+      if (direct) return direct;
+
+      const title = exactText(
+        "Nova Conversa",
+        "h1,h2,h3,strong,span,div"
+      );
+
+      let node = title;
+
+      for (let depth = 0; node && depth < 10; depth += 1, node = node.parentElement) {
+        if (!visible(node)) continue;
+
+        const text = norm(node.textContent);
+        const inputs = node.querySelectorAll?.("input")?.length || 0;
+
+        if (
+          inputs >= 2 &&
+          text.includes("cancelar") &&
+          text.includes("continuar")
+        ) {
+          return node;
+        }
+      }
+
+      return null;
+    }
+
+    function modalInputs() {
+      const modal = conversationModal();
+      if (!modal) return [];
+
+      return [...modal.querySelectorAll("input")].filter(visible);
+    }
+
     function nameInput() {
+      const inputs = modalInputs();
+
+      const exact = inputs.find((input) => {
+        const hint = norm(
+          [
+            input.getAttribute("placeholder"),
+            input.getAttribute("aria-label"),
+            input.getAttribute("name"),
+            input.getAttribute("id")
+          ]
+            .filter(Boolean)
+            .join(" ")
+        );
+
+        return (
+          hint.includes("joao silva") ||
+          hint.includes("nome")
+        );
+      });
+
+      if (exact) return exact;
+
       return (
         findInputNearLabel(["nome", "nome (opcional)"]) ||
-        findContains("input", [["joao", "silva"], ["nome"]])
+        inputs[0] ||
+        null
       );
     }
 
     function phoneInput() {
+      const inputs = modalInputs();
+
+      const exact = inputs.find((input) => {
+        const hint = norm(
+          [
+            input.getAttribute("placeholder"),
+            input.getAttribute("aria-label"),
+            input.getAttribute("name"),
+            input.getAttribute("id"),
+            input.getAttribute("type")
+          ]
+            .filter(Boolean)
+            .join(" ")
+        );
+
+        return (
+          hint.includes("11999998888") ||
+          hint.includes("telefone") ||
+          hint.includes("celular") ||
+          hint.includes("whatsapp") ||
+          input.type === "tel"
+        );
+      });
+
+      if (exact) return exact;
+
       return (
         findInputNearLabel([
           "telefone",
@@ -670,42 +770,28 @@
           "celular",
           "whatsapp"
         ]) ||
-        findContains("input", [["11999998888"], ["telefone"]]) ||
-        all('input[type="tel"]').find(visible) ||
+        inputs[1] ||
         null
       );
     }
 
     function modalOpen() {
-      const title = findContains(
-        '[role="dialog"] *,[aria-modal="true"] *,h1,h2,h3,strong,span,div',
-        [["nova", "conversa"]]
-      );
-
-      return Boolean(title && (nameInput() || phoneInput()));
+      return Boolean(conversationModal() && (nameInput() || phoneInput()));
     }
 
-    function setValue(input, value) {
-      if (!input || !value) return false;
+    function dispatchFieldEvents(input, value) {
+      try {
+        input.dispatchEvent(
+          new InputEvent("beforeinput", {
+            bubbles: true,
+            cancelable: true,
+            inputType: "insertText",
+            data: value
+          })
+        );
+      } catch {}
 
       try {
-        input.focus();
-
-        const proto =
-          input instanceof HTMLInputElement
-            ? HTMLInputElement.prototype
-            : HTMLTextAreaElement.prototype;
-
-        const setter = Object.getOwnPropertyDescriptor(
-          proto,
-          "value"
-        )?.set;
-
-        setter ? setter.call(input, "") : (input.value = "");
-        input.dispatchEvent(new Event("input", { bubbles: true }));
-
-        setter ? setter.call(input, value) : (input.value = value);
-
         input.dispatchEvent(
           new InputEvent("input", {
             bubbles: true,
@@ -713,21 +799,78 @@
             data: value
           })
         );
-        input.dispatchEvent(new Event("change", { bubbles: true }));
+      } catch {
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+      }
+
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+
+    function setValue(input, value) {
+      if (!input || value == null) return false;
+
+      const wanted = String(value);
+
+      try {
+        input.focus();
+
+        const ownSetter = Object.getOwnPropertyDescriptor(
+          input,
+          "value"
+        )?.set;
+
+        const proto = Object.getPrototypeOf(input);
+        const protoSetter = Object.getOwnPropertyDescriptor(
+          proto,
+          "value"
+        )?.set;
+
+        const tracker = input._valueTracker;
+        const previous = input.value;
+
+        if (protoSetter && ownSetter !== protoSetter) {
+          protoSetter.call(input, wanted);
+        } else if (ownSetter) {
+          ownSetter.call(input, wanted);
+        } else if (protoSetter) {
+          protoSetter.call(input, wanted);
+        } else {
+          input.value = wanted;
+        }
+
+        // React mantém um rastreador interno do valor. Restaurar o valor anterior
+        // faz o onChange reconhecer a alteração feita pela extensão.
+        try {
+          tracker?.setValue?.(previous);
+        } catch {}
+
+        dispatchFieldEvents(input, wanted);
+
+        input.dispatchEvent(
+          new KeyboardEvent("keyup", {
+            bubbles: true,
+            key: wanted.slice(-1) || "Unidentified"
+          })
+        );
+
         input.blur();
 
-        return true;
+        return String(input.value || "") === wanted ||
+          digits(input.value) === digits(wanted) ||
+          norm(input.value).includes(norm(wanted));
       } catch {
         return false;
       }
     }
 
     function countrySelected() {
-      return Boolean(
-        findContains(
-          "button,[role=combobox],[role=button],div",
-          [["brasil", "+55"], ["brasil"], ["br", "+55"]]
-        )
+      const modal = conversationModal();
+      if (!modal) return false;
+
+      const text = norm(modal.textContent);
+      return (
+        text.includes("brasil") &&
+        (text.includes("+55") || text.includes("br +55"))
       );
     }
 
@@ -800,57 +943,95 @@
     }
 
     function fillModal() {
-      showToast("Nova Conversa aberta. Preenchendo o lead…");
-
+      const modal = conversationModal();
       const name = nameInput();
       const phone = phoneInput();
 
-      if (name && !validName(name)) setValue(name, lead.nome);
-
-      chooseBrazil();
-
-      if (phone && !validPhone(phone)) {
-        setValue(phone, lead.phone);
-      }
-
-      if (
-        !validName(name) ||
-        !validPhone(phone) ||
-        !countrySelected()
-      ) {
+      if (!modal) {
+        showToast("Aguardando o modal Nova Conversa…");
         return;
       }
 
-      const next = findContains(
-        "button,[role=button]",
-        [["continuar"], ["continue"]]
-      );
+      if (!name || !phone) {
+        showToast(
+          `Modal encontrado. Nome: ${name ? "OK" : "não localizado"} · Telefone: ${phone ? "OK" : "não localizado"}`
+        );
+        return;
+      }
+
+      if (!validName(name)) {
+        setValue(name, lead.nome);
+      }
+
+      if (!countrySelected()) {
+        chooseBrazil();
+      }
+
+      if (!validPhone(phone)) {
+        setValue(phone, lead.phone);
+      }
+
+      // Revalida após o Scale/React processar os eventos.
+      const nameOk = validName(name);
+      const phoneOk = validPhone(phone);
+      const countryOk = countrySelected();
+
+      if (!nameOk || !phoneOk || !countryOk) {
+        showToast(
+          `Preenchendo… Nome: ${nameOk ? "OK" : "aguardando"} · Telefone: ${phoneOk ? "OK" : "aguardando"} · +55: ${countryOk ? "OK" : "aguardando"}`
+        );
+
+        // Segunda tentativa curta, útil quando o framework reverte o primeiro valor.
+        setTimeout(() => {
+          if (!finished && modalOpen()) {
+            const currentName = nameInput();
+            const currentPhone = phoneInput();
+
+            if (currentName && !validName(currentName)) {
+              setValue(currentName, lead.nome);
+            }
+
+            if (currentPhone && !validPhone(currentPhone)) {
+              setValue(currentPhone, lead.phone);
+            }
+          }
+        }, 120);
+
+        return;
+      }
+
+      const next = [...modal.querySelectorAll("button,[role=button]")]
+        .filter(visible)
+        .find((button) => {
+          const text = norm(button.textContent);
+          return text.includes("continuar") || text.includes("continue");
+        });
 
       if (
         !next ||
         next.disabled ||
         next.getAttribute("aria-disabled") === "true"
       ) {
+        showToast(
+          "Nome e telefone preenchidos. Aguardando o botão Continuar habilitar…"
+        );
         return;
       }
 
       if (!continueClicked) {
         continueClicked = true;
-        showToast(
-          "Dados preenchidos. Clicando em Continuar…"
-        );
+        showToast("Dados reconhecidos pelo Scale. Continuando…");
 
         setTimeout(() => {
           safeClick(
             next,
             "Avançando para a próxima etapa…",
-            250
+            100
           );
 
           finished = true;
-
           chrome.storage.local.remove([LEAD_KEY]);
-        }, 650);
+        }, 350);
       }
     }
 
