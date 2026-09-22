@@ -12,7 +12,7 @@
 
   const digits = (value) => String(value || "").replace(/\D/g, "");
 
-  const INIT_KEY = "__lc_scale_connector_v23__";
+  const INIT_KEY = "__lc_scale_connector_v24__";
 
   if (window[INIT_KEY]) return;
   window[INIT_KEY] = true;
@@ -814,37 +814,37 @@
       try {
         input.focus();
 
-        const ownSetter = Object.getOwnPropertyDescriptor(
-          input,
-          "value"
-        )?.set;
-
-        const proto = Object.getPrototypeOf(input);
-        const protoSetter = Object.getOwnPropertyDescriptor(
-          proto,
-          "value"
-        )?.set;
-
-        const tracker = input._valueTracker;
-        const previous = input.value;
-
-        if (protoSetter && ownSetter !== protoSetter) {
-          protoSetter.call(input, wanted);
-        } else if (ownSetter) {
-          ownSetter.call(input, wanted);
-        } else if (protoSetter) {
-          protoSetter.call(input, wanted);
-        } else {
-          input.value = wanted;
-        }
-
-        // React mantém um rastreador interno do valor. Restaurar o valor anterior
-        // faz o onChange reconhecer a alteração feita pela extensão.
         try {
-          tracker?.setValue?.(previous);
+          input.select?.();
+          document.execCommand?.("insertText", false, wanted);
         } catch {}
 
-        dispatchFieldEvents(input, wanted);
+        if (
+          String(input.value || "") !== wanted &&
+          digits(input.value) !== digits(wanted) &&
+          !norm(input.value).includes(norm(wanted))
+        ) {
+          const previous = input.value;
+          const proto = Object.getPrototypeOf(input);
+          const nativeSetter = Object.getOwnPropertyDescriptor(
+            proto,
+            "value"
+          )?.set;
+
+          if (nativeSetter) {
+            nativeSetter.call(input, wanted);
+          } else {
+            input.value = wanted;
+          }
+
+          try {
+            input._valueTracker?.setValue?.(previous);
+          } catch {}
+
+          dispatchFieldEvents(input, wanted);
+        } else {
+          dispatchFieldEvents(input, wanted);
+        }
 
         input.dispatchEvent(
           new KeyboardEvent("keyup", {
@@ -853,11 +853,11 @@
           })
         );
 
-        input.blur();
-
-        return String(input.value || "") === wanted ||
+        return (
+          String(input.value || "") === wanted ||
           digits(input.value) === digits(wanted) ||
-          norm(input.value).includes(norm(wanted));
+          norm(input.value).includes(norm(wanted))
+        );
       } catch {
         return false;
       }
@@ -959,29 +959,24 @@
         return;
       }
 
+      const expectedPhone = digits(lead.phone).slice(-11);
+
       if (!validName(name)) {
         setValue(name, lead.nome);
       }
 
-      if (!countrySelected()) {
-        chooseBrazil();
-      }
-
       if (!validPhone(phone)) {
-        setValue(phone, lead.phone);
+        setValue(phone, expectedPhone);
       }
 
-      // Revalida após o Scale/React processar os eventos.
       const nameOk = validName(name);
       const phoneOk = validPhone(phone);
-      const countryOk = countrySelected();
 
-      if (!nameOk || !phoneOk || !countryOk) {
+      if (!nameOk || !phoneOk) {
         showToast(
-          `Preenchendo… Nome: ${nameOk ? "OK" : "aguardando"} · Telefone: ${phoneOk ? "OK" : "aguardando"} · +55: ${countryOk ? "OK" : "aguardando"}`
+          `Preenchendo… Nome: ${nameOk ? "OK" : "aguardando"} · Telefone: ${phoneOk ? "OK" : "aguardando"}`
         );
 
-        // Segunda tentativa curta, útil quando o framework reverte o primeiro valor.
         setTimeout(() => {
           if (!finished && modalOpen()) {
             const currentName = nameInput();
@@ -992,47 +987,18 @@
             }
 
             if (currentPhone && !validPhone(currentPhone)) {
-              setValue(currentPhone, lead.phone);
+              setValue(currentPhone, expectedPhone);
             }
           }
-        }, 120);
+        }, 180);
 
         return;
       }
 
-      const next = [...modal.querySelectorAll("button,[role=button]")]
-        .filter(visible)
-        .find((button) => {
-          const text = norm(button.textContent);
-          return text.includes("continuar") || text.includes("continue");
-        });
+      showToast("Nome e telefone preenchidos. Continuar liberado.");
 
-      if (
-        !next ||
-        next.disabled ||
-        next.getAttribute("aria-disabled") === "true"
-      ) {
-        showToast(
-          "Nome e telefone preenchidos. Aguardando o botão Continuar habilitar…"
-        );
-        return;
-      }
-
-      if (!continueClicked) {
-        continueClicked = true;
-        showToast("Dados reconhecidos pelo Scale. Continuando…");
-
-        setTimeout(() => {
-          safeClick(
-            next,
-            "Avançando para a próxima etapa…",
-            100
-          );
-
-          finished = true;
-          chrome.storage.local.remove([LEAD_KEY]);
-        }, 350);
-      }
+      finished = true;
+      chrome.storage.local.remove([LEAD_KEY]);
     }
 
     function step() {
