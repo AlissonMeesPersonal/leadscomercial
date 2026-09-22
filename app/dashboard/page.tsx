@@ -219,7 +219,7 @@ export default function DashboardPage() {
 
     updateStatus(lead.id, "Em contato");
     setNotice(`Abrindo o Scale para ${lead.nome}. Os dados também foram copiados.`);
-    window.open(`https://scale.26fit.com.br/d/chat-unidades?${params.toString()}`, "_blank", "noopener,noreferrer");
+    window.open(`https://scale.26fit.com.br/d/at-unidades?${params.toString()}`, "_blank", "noopener,noreferrer");
   }
 
   async function logout() {
