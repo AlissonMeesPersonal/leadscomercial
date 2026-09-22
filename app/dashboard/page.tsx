@@ -24,6 +24,14 @@ const SUPABASE_KEY = "sb_publishable_TD903F8atFHoM64JbiEEFA_qhnm_PhI";
 const COMMERCIAL_ACCESS_KEY = "commercial-supabase-access";
 const LEGACY_STORAGE_KEY = "leads-comercial";
 
+type SessionInfo = {
+  username: string;
+  displayName: string;
+  role: "admin" | "user";
+  unitId: string | null;
+  unitName: string | null;
+};
+
 type DbLead = {
   id: string;
   name: string;
@@ -227,9 +235,19 @@ export default function DashboardPage() {
   const [cityFilter, setCityFilter] = useState("Todas");
   const [notice, setNotice] = useState("");
   const [processing, setProcessing] = useState(false);
+  const [sessionInfo, setSessionInfo] = useState<SessionInfo | null>(null);
 
   useEffect(() => {
     let cancelled = false;
+
+    async function loadSessionInfo() {
+      try {
+        const response = await fetch("/api/session", { cache: "no-store" });
+        if (!response.ok) return;
+        const data = (await response.json()) as SessionInfo;
+        if (!cancelled) setSessionInfo(data);
+      } catch {}
+    }
 
     async function loadLeads() {
       if (!sessionStorage.getItem(COMMERCIAL_ACCESS_KEY)) {
@@ -292,6 +310,7 @@ export default function DashboardPage() {
       }
     }
 
+    loadSessionInfo();
     loadLeads();
 
     return () => {
@@ -595,9 +614,19 @@ export default function DashboardPage() {
         <div>
           <p className="eyebrow">PAINEL COMERCIAL</p>
           <h1>Leads Comercial</h1>
+          {sessionInfo && (
+            <p className="session-line">
+              {sessionInfo.role === "admin"
+                ? `Administrador · ${sessionInfo.displayName}`
+                : `Unidade ${sessionInfo.unitName || "—"} · ${sessionInfo.displayName}`}
+            </p>
+          )}
         </div>
         <div className="topbar-actions">
           <ThemeToggle />
+          {sessionInfo?.role === "admin" && (
+            <a className="ghost-btn admin-link" href="/admin">Usuários e unidades</a>
+          )}
           <input ref={inputRef} type="file" accept=".xlsx,.xls,.xlsm,.xlsb,.ods,.csv,.tsv,.pdf,.docx,.txt,.json" onChange={handleFile} hidden />
           <button className="primary-btn small" onClick={() => inputRef.current?.click()} disabled={processing || !loaded}>
             {processing ? "Importando..." : "+ Importar leads"}
