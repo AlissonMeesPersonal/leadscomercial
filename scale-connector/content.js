@@ -1,8 +1,7 @@
 (() => {
-  const STORAGE_KEY = "lc_scale_automation_v5";
-  const params = new URLSearchParams(window.location.search);
+  const LEAD_KEY = "lc_pending_scale_lead";
+  const host = location.hostname;
 
-  const digits = (value) => String(value || "").replace(/\D/g, "");
   const norm = (value) =>
     String(value || "")
       .normalize("NFD")
@@ -11,779 +10,798 @@
       .trim()
       .toLowerCase();
 
-  if (params.get("lc_auto") === "1") {
-    sessionStorage.setItem(
-      STORAGE_KEY,
-      JSON.stringify({
-        lead: {
-          nome: params.get("lc_nome") || "",
-          ddi: digits(params.get("lc_ddi") || "55"),
-          phone: digits(params.get("lc_phone") || "")
-        },
+  const digits = (value) => String(value || "").replace(/\D/g, "");
+
+  if (host === "leadscomercial.vercel.app") {
+    window.addEventListener("message", async (event) => {
+      if (
+        event.source !== window ||
+        event.data?.source !== "leads-comercial" ||
+        event.data?.type !== "START_SCALE_LEAD"
+      ) return;
+
+      const payload = event.data.payload || {};
+      const lead = {
+        nome: String(payload.nome || "").trim(),
+        ddi: digits(payload.ddi || "55"),
+        phone: digits(payload.phone || ""),
         createdAt: Date.now()
-      })
-    );
-  }
+      };
 
-  let saved;
-  try {
-    saved = JSON.parse(sessionStorage.getItem(STORAGE_KEY) || "null");
-  } catch {
-    saved = null;
-  }
-
-  if (!saved?.lead?.phone) return;
-
-  const lead = saved.lead;
-
-  let finished = false;
-  let continueClicked = false;
-  let lastActionAt = 0;
-  let lastMessage = "";
-  let menuClickedAt = 0;
-  let unitClickedAt = 0;
-  let sidebarOpenedAt = 0;
-
-  function visible(el) {
-    if (!el || !(el instanceof Element)) return false;
-    const style = getComputedStyle(el);
-    if (
-      style.display === "none" ||
-      style.visibility === "hidden" ||
-      Number(style.opacity) === 0
-    ) return false;
-    const r = el.getBoundingClientRect();
-    return r.width > 2 && r.height > 2;
-  }
-
-  function roots() {
-    const result = [document];
-    const queue = [document];
-
-    while (queue.length) {
-      const root = queue.shift();
+      if (!lead.phone) return;
 
       try {
-        root.querySelectorAll("*").forEach((el) => {
-          if (el.shadowRoot) {
-            result.push(el.shadowRoot);
-            queue.push(el.shadowRoot);
-          }
+        await chrome.storage.local.set({ [LEAD_KEY]: lead });
 
-          if (el instanceof HTMLIFrameElement) {
-            try {
-              if (el.contentDocument) {
-                result.push(el.contentDocument);
-                queue.push(el.contentDocument);
-              }
-            } catch {}
-          }
-        });
-      } catch {}
-    }
-
-    return result;
-  }
-
-  function all(selector) {
-    const result = [];
-    const seen = new Set();
-
-    for (const root of roots()) {
-      try {
-        root.querySelectorAll(selector).forEach((el) => {
-          if (!seen.has(el)) {
-            seen.add(el);
-            result.push(el);
-          }
-        });
-      } catch {}
-    }
-
-    return result;
-  }
-
-  function textOf(el) {
-    return norm(
-      [
-        el?.textContent,
-        el?.getAttribute?.("aria-label"),
-        el?.getAttribute?.("title"),
-        el?.getAttribute?.("placeholder"),
-        el?.getAttribute?.("data-testid"),
-        el?.getAttribute?.("name"),
-        el?.getAttribute?.("href")
-      ].filter(Boolean).join(" ")
-    );
-  }
-
-  function findContains(selector, groups) {
-    return (
-      all(selector).find((el) => {
-        if (!visible(el)) return false;
-        const text = textOf(el);
-        return groups.some((group) =>
-          group.every((part) => text.includes(norm(part)))
+        window.postMessage(
+          {
+            source: "leads-scale-connector",
+            type: "LEAD_SAVED"
+          },
+          window.location.origin
         );
-      }) || null
-    );
+      } catch (error) {
+        console.error("[Leads Comercial] Falha ao salvar lead para o Scale:", error);
+      }
+    });
+
+    return;
   }
 
-  function findExactVisibleText(text, selector = "span,div,p,strong,a,button,[role=button],[role=menuitem]") {
-    const wanted = norm(text);
+  if (host !== "scale.26fit.com.br") return;
 
-    const matches = all(selector)
-      .filter((el) => {
-        if (!visible(el)) return false;
-        const own = norm(el.textContent);
-        return own === wanted || own.startsWith(wanted);
-      })
-      .map((el) => {
-        const r = el.getBoundingClientRect();
-        return { el, area: r.width * r.height };
-      })
-      .sort((a, b) => a.area - b.area);
+  chrome.storage.local.get([LEAD_KEY], (result) => {
+    const lead = result?.[LEAD_KEY];
 
-    return matches[0]?.el || null;
-  }
+    if (!lead?.phone) return;
 
-  function clickable(el) {
-    if (!el) return null;
-
-    const direct = el.closest("button,a,[role=button],[role=menuitem],[tabindex]");
-    if (direct) return direct;
-
-    let parent = el;
-    for (let i = 0; parent && i < 5; i += 1, parent = parent.parentElement) {
-      if (!visible(parent)) continue;
-      const style = getComputedStyle(parent);
-      if (style.cursor === "pointer") return parent;
+    if (Date.now() - Number(lead.createdAt || 0) > 10 * 60 * 1000) {
+      chrome.storage.local.remove([LEAD_KEY]);
+      return;
     }
 
-    return el;
-  }
+    startAutomation(lead);
+  });
 
-  function fireClick(el) {
-    const target = clickable(el);
-    if (!target || !visible(target)) return false;
+  function startAutomation(lead) {
+    let finished = false;
+    let continueClicked = false;
+    let lastActionAt = 0;
+    let lastMessage = "";
+    let sidebarClickedAt = 0;
+    let chatUnidadesClickedAt = 0;
+    let santaCruzClickedAt = 0;
 
-    try {
-      target.scrollIntoView({ block: "center", inline: "center" });
-    } catch {}
+    function visible(el) {
+      if (!el || !(el instanceof Element)) return false;
 
-    try {
-      target.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
-    } catch {}
+      const style = getComputedStyle(el);
+      if (
+        style.display === "none" ||
+        style.visibility === "hidden" ||
+        Number(style.opacity) === 0
+      ) return false;
 
-    try {
-      target.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
-      target.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
-      target.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-      if (typeof target.click === "function") target.click();
-      return true;
-    } catch {
-      return false;
-    }
-  }
-
-  function safeClick(el, message, minGap = 650) {
-    const now = Date.now();
-    if (now - lastActionAt < minGap) return false;
-
-    if (!fireClick(el)) return false;
-
-    lastActionAt = now;
-    if (message) showToast(message);
-    return true;
-  }
-
-  function showToast(message) {
-    if (message === lastMessage) return;
-    lastMessage = message;
-
-    let toast = document.getElementById("lc-scale-toast");
-
-    if (!toast) {
-      toast = document.createElement("div");
-      toast.id = "lc-scale-toast";
-
-      Object.assign(toast.style, {
-        position: "fixed",
-        right: "18px",
-        bottom: "18px",
-        zIndex: "2147483647",
-        padding: "12px 16px",
-        borderRadius: "12px",
-        background: "#101936",
-        color: "#fff",
-        border: "1px solid rgba(255,255,255,.18)",
-        boxShadow: "0 12px 30px rgba(0,0,0,.28)",
-        font: "600 13px Arial, sans-serif",
-        maxWidth: "420px"
-      });
-
-      document.documentElement.appendChild(toast);
+      const rect = el.getBoundingClientRect();
+      return rect.width > 2 && rect.height > 2;
     }
 
-    toast.textContent = "Leads Comercial: " + message;
-  }
+    function roots() {
+      const found = [document];
+      const queue = [document];
 
-  function cleanParams() {
-    try {
-      const url = new URL(location.href);
-      ["lc_auto", "lc_nome", "lc_ddi", "lc_phone"].forEach((key) =>
-        url.searchParams.delete(key)
+      while (queue.length) {
+        const root = queue.shift();
+
+        try {
+          root.querySelectorAll("*").forEach((el) => {
+            if (el.shadowRoot) {
+              found.push(el.shadowRoot);
+              queue.push(el.shadowRoot);
+            }
+
+            if (el instanceof HTMLIFrameElement) {
+              try {
+                if (el.contentDocument) {
+                  found.push(el.contentDocument);
+                  queue.push(el.contentDocument);
+                }
+              } catch {}
+            }
+          });
+        } catch {}
+      }
+
+      return found;
+    }
+
+    function all(selector) {
+      const output = [];
+      const seen = new Set();
+
+      for (const root of roots()) {
+        try {
+          root.querySelectorAll(selector).forEach((el) => {
+            if (!seen.has(el)) {
+              seen.add(el);
+              output.push(el);
+            }
+          });
+        } catch {}
+      }
+
+      return output;
+    }
+
+    function textOf(el) {
+      return norm(
+        [
+          el?.textContent,
+          el?.getAttribute?.("aria-label"),
+          el?.getAttribute?.("title"),
+          el?.getAttribute?.("placeholder"),
+          el?.getAttribute?.("data-testid"),
+          el?.getAttribute?.("name"),
+          el?.getAttribute?.("href")
+        ]
+          .filter(Boolean)
+          .join(" ")
       );
-      history.replaceState(history.state, "", url.toString());
-    } catch {}
-  }
-
-  function recoverBadDirectRoute() {
-    if (!location.pathname.includes("/d/chat-unidades")) return false;
-
-    const url = new URL("https://scale.26fit.com.br/d/at-unidades");
-    url.searchParams.set("lc_auto", "1");
-    url.searchParams.set("lc_nome", lead.nome);
-    url.searchParams.set("lc_ddi", lead.ddi || "55");
-    url.searchParams.set("lc_phone", lead.phone);
-
-    showToast("Voltando para a tela funcional do Scale…");
-    location.replace(url.toString());
-    return true;
-  }
-
-  function sidebarChatOption() {
-    const exact =
-      findExactVisibleText("Chat Unidades") ||
-      findExactVisibleText("Chat por Unidade");
-
-    if (exact) {
-      const r = exact.getBoundingClientRect();
-      if (r.left < 300) return exact;
     }
 
-    return null;
-  }
+    function findContains(selector, groups) {
+      return (
+        all(selector).find((el) => {
+          if (!visible(el)) return false;
 
-  function sidebarIsExpanded() {
-    return Boolean(sidebarChatOption());
-  }
+          const text = textOf(el);
 
-  function clickSidebarIcon() {
-    const semantic = findContains(
-      'button,a,[role=button],[tabindex]',
-      [["chat"], ["mensagem"], ["conversa"]]
-    );
+          return groups.some((group) =>
+            group.every((part) => text.includes(norm(part)))
+          );
+        }) || null
+      );
+    }
 
-    if (semantic) {
-      const r = semantic.getBoundingClientRect();
-      if (r.left < 100 && r.top > 120 && r.top < 350) {
-        sidebarOpenedAt = Date.now();
-        return safeClick(semantic, "Abrindo o menu de chats…");
+    function exactText(text, selector = "span,div,p,strong,a,button,[role=button],[role=menuitem]") {
+      const wanted = norm(text);
+
+      const matches = all(selector)
+        .filter((el) => {
+          if (!visible(el)) return false;
+
+          const txt = norm(el.textContent);
+          return txt === wanted || txt.startsWith(wanted);
+        })
+        .map((el) => {
+          const rect = el.getBoundingClientRect();
+          return { el, area: rect.width * rect.height };
+        })
+        .sort((a, b) => a.area - b.area);
+
+      return matches[0]?.el || null;
+    }
+
+    function clickable(el) {
+      if (!el) return null;
+
+      const direct = el.closest(
+        "button,a,[role=button],[role=menuitem],[tabindex]"
+      );
+
+      if (direct) return direct;
+
+      let parent = el;
+
+      for (
+        let depth = 0;
+        parent && depth < 5;
+        depth += 1, parent = parent.parentElement
+      ) {
+        if (!visible(parent)) continue;
+
+        try {
+          if (getComputedStyle(parent).cursor === "pointer") return parent;
+        } catch {}
+      }
+
+      return el;
+    }
+
+    function safeClick(el, message, gap = 650) {
+      const target = clickable(el);
+      if (!target || !visible(target)) return false;
+
+      const now = Date.now();
+      if (now - lastActionAt < gap) return false;
+      lastActionAt = now;
+
+      try {
+        target.scrollIntoView({ block: "center", inline: "center" });
+      } catch {}
+
+      try {
+        target.dispatchEvent(
+          new MouseEvent("mousedown", { bubbles: true, cancelable: true })
+        );
+        target.dispatchEvent(
+          new MouseEvent("mouseup", { bubbles: true, cancelable: true })
+        );
+        target.dispatchEvent(
+          new MouseEvent("click", { bubbles: true, cancelable: true })
+        );
+
+        if (typeof target.click === "function") target.click();
+
+        if (message) showToast(message);
+        return true;
+      } catch {
+        return false;
       }
     }
 
-    const candidates = all('button,a,[role=button],[tabindex]')
-      .filter((el) => {
-        if (!visible(el)) return false;
-        const r = el.getBoundingClientRect();
+    function showToast(message) {
+      if (message === lastMessage) return;
+      lastMessage = message;
 
-        return (
-          r.left < 80 &&
-          r.top > 150 &&
-          r.top < 320 &&
-          r.width <= 90 &&
-          r.height <= 90
+      let toast = document.getElementById("lc-scale-toast");
+
+      if (!toast) {
+        toast = document.createElement("div");
+        toast.id = "lc-scale-toast";
+
+        Object.assign(toast.style, {
+          position: "fixed",
+          right: "18px",
+          bottom: "18px",
+          zIndex: "2147483647",
+          padding: "12px 16px",
+          borderRadius: "12px",
+          background: "#101936",
+          color: "#fff",
+          border: "1px solid rgba(255,255,255,.18)",
+          boxShadow: "0 12px 30px rgba(0,0,0,.28)",
+          font: "600 13px Arial, sans-serif",
+          maxWidth: "430px"
+        });
+
+        document.documentElement.appendChild(toast);
+      }
+
+      toast.textContent = "Leads Comercial: " + message;
+    }
+
+    function sidebarChatIcon() {
+      const semantic = findContains(
+        "button,a,[role=button],[tabindex]",
+        [["chat"], ["mensagem"], ["conversa"]]
+      );
+
+      if (semantic) {
+        const r = semantic.getBoundingClientRect();
+
+        if (r.left < 105 && r.top > 120 && r.top < 350) return semantic;
+      }
+
+      const candidates = all("button,a,[role=button],[tabindex]")
+        .filter((el) => {
+          if (!visible(el)) return false;
+
+          const r = el.getBoundingClientRect();
+
+          return (
+            r.left < 85 &&
+            r.top > 145 &&
+            r.top < 330 &&
+            r.width <= 90 &&
+            r.height <= 90
+          );
+        })
+        .map((el) => {
+          const r = el.getBoundingClientRect();
+          let score = 0;
+
+          if (el.querySelector("svg")) score += 10;
+          if (r.top > 175 && r.top < 275) score += 18;
+          if (r.left < 65) score += 8;
+
+          return { el, score };
+        })
+        .sort((a, b) => b.score - a.score);
+
+      if (candidates[0]) return candidates[0].el;
+
+      return document.elementFromPoint(28, 245);
+    }
+
+    function chatUnidadesOption() {
+      const exact =
+        exactText("Chat Unidades") ||
+        exactText("Chat por Unidade");
+
+      if (exact) {
+        const r = exact.getBoundingClientRect();
+
+        if (r.left < window.innerWidth * 0.45) return exact;
+      }
+
+      return findContains(
+        "button,a,[role=button],[role=menuitem],[tabindex],span,div",
+        [["chat", "unidades"], ["chat", "por", "unidade"]]
+      );
+    }
+
+    function unitPanelVisible() {
+      return Boolean(
+        findContains("h1,h2,h3,strong,span,div,p", [
+          ["chat", "por", "unidade"],
+          ["selecione", "unidade"],
+          ["selecione", "uma", "unidade"]
+        ])
+      );
+    }
+
+    function santaCruzRow() {
+      const matches = all(
+        "button,a,[role=button],[role=menuitem],[tabindex],div,span,p,strong"
+      )
+        .filter((el) => {
+          if (!visible(el)) return false;
+
+          const text = norm(el.textContent);
+          if (text !== "santa cruz" && !text.startsWith("santa cruz")) {
+            return false;
+          }
+
+          const r = el.getBoundingClientRect();
+
+          // Ignora o seletor superior da conta.
+          if (r.top < 145 && r.left > window.innerWidth * 0.55) return false;
+
+          // A linha da unidade aparece na região esquerda/central da tela.
+          if (r.top < 140) return false;
+          if (r.left > window.innerWidth * 0.68) return false;
+
+          return true;
+        })
+        .map((el) => {
+          const r = el.getBoundingClientRect();
+          const target = clickable(el);
+          let score = 0;
+
+          if (target !== el) score += 15;
+          if (el.matches("button,a,[role=button],[role=menuitem],[tabindex]")) {
+            score += 20;
+          }
+          if (r.left < window.innerWidth * 0.45) score += 10;
+          if (r.width > 80) score += 5;
+
+          return { el, score, area: r.width * r.height };
+        })
+        .sort((a, b) => b.score - a.score || a.area - b.area);
+
+      return matches[0]?.el || null;
+    }
+
+    function santaCruzChatLoaded() {
+      return Boolean(
+        findContains("h1,h2,h3,strong,span,div", [
+          ["chat", "santa", "cruz"]
+        ])
+      );
+    }
+
+    function newConversationButton() {
+      return (
+        exactText(
+          "+ Nova Conversa",
+          "button,a,[role=button],span,div"
+        ) ||
+        exactText(
+          "Nova Conversa",
+          "button,a,[role=button],span,div"
+        ) ||
+        findContains(
+          "button,a,[role=button],[tabindex]",
+          [["nova", "conversa"], ["novo", "contato"]]
+        )
+      );
+    }
+
+    function findInputNearLabel(terms) {
+      const labels = all("label,span,div,p").filter(visible);
+
+      for (const label of labels) {
+        const text = norm(label.textContent);
+
+        if (!terms.some((term) => text.includes(norm(term)))) continue;
+
+        if (label.tagName === "LABEL") {
+          const nested = label.querySelector("input");
+          if (nested && visible(nested)) return nested;
+
+          const id = label.getAttribute("for");
+
+          if (id) {
+            for (const root of roots()) {
+              try {
+                const input = root.getElementById?.(id);
+
+                if (input instanceof HTMLInputElement && visible(input)) {
+                  return input;
+                }
+              } catch {}
+            }
+          }
+        }
+
+        const lr = label.getBoundingClientRect();
+
+        const candidates = all("input")
+          .filter((input) => {
+            if (!visible(input)) return false;
+
+            const r = input.getBoundingClientRect();
+
+            return (
+              r.top >= lr.top - 10 &&
+              r.top <= lr.bottom + 120 &&
+              r.left >= lr.left - 60
+            );
+          })
+          .sort(
+            (a, b) =>
+              a.getBoundingClientRect().top -
+              b.getBoundingClientRect().top
+          );
+
+        if (candidates[0]) return candidates[0];
+      }
+
+      return null;
+    }
+
+    function nameInput() {
+      return (
+        findInputNearLabel(["nome", "nome (opcional)"]) ||
+        findContains("input", [["joao", "silva"], ["nome"]])
+      );
+    }
+
+    function phoneInput() {
+      return (
+        findInputNearLabel([
+          "telefone",
+          "telefone (com ddd)",
+          "celular",
+          "whatsapp"
+        ]) ||
+        findContains("input", [["11999998888"], ["telefone"]]) ||
+        all('input[type="tel"]').find(visible) ||
+        null
+      );
+    }
+
+    function modalOpen() {
+      const title = findContains(
+        '[role="dialog"] *,[aria-modal="true"] *,h1,h2,h3,strong,span,div',
+        [["nova", "conversa"]]
+      );
+
+      return Boolean(title && (nameInput() || phoneInput()));
+    }
+
+    function setValue(input, value) {
+      if (!input || !value) return false;
+
+      try {
+        input.focus();
+
+        const proto =
+          input instanceof HTMLInputElement
+            ? HTMLInputElement.prototype
+            : HTMLTextAreaElement.prototype;
+
+        const setter = Object.getOwnPropertyDescriptor(
+          proto,
+          "value"
+        )?.set;
+
+        setter ? setter.call(input, "") : (input.value = "");
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+
+        setter ? setter.call(input, value) : (input.value = value);
+
+        input.dispatchEvent(
+          new InputEvent("input", {
+            bubbles: true,
+            inputType: "insertText",
+            data: value
+          })
         );
-      })
-      .map((el) => {
-        const r = el.getBoundingClientRect();
-        let score = 0;
+        input.dispatchEvent(new Event("change", { bubbles: true }));
+        input.blur();
 
-        if (el.querySelector("svg")) score += 10;
-        if (r.top > 175 && r.top < 260) score += 15;
-        if (r.left < 60) score += 8;
-
-        return { el, score };
-      })
-      .sort((a, b) => b.score - a.score);
-
-    if (candidates[0]) {
-      sidebarOpenedAt = Date.now();
-      return safeClick(candidates[0].el, "Abrindo o menu de chats…");
+        return true;
+      } catch {
+        return false;
+      }
     }
 
-    const el = document.elementFromPoint(25, 210);
-    if (el) {
-      sidebarOpenedAt = Date.now();
-      return safeClick(el, "Abrindo o menu de chats…");
+    function countrySelected() {
+      return Boolean(
+        findContains(
+          "button,[role=combobox],[role=button],div",
+          [["brasil", "+55"], ["brasil"], ["br", "+55"]]
+        )
+      );
     }
 
-    return false;
-  }
+    function chooseBrazil() {
+      if (countrySelected()) return true;
 
-  function clickChatUnidadesMenu() {
-    const option = sidebarChatOption();
-    if (!option) return false;
+      const label = findContains("label,span,div,p", [
+        ["pais", "ddi"],
+        ["pais"]
+      ]);
 
-    menuClickedAt = Date.now();
+      if (!label) return false;
 
-    return safeClick(
-      option,
-      "Chat Unidades selecionado. Aguardando a lista de unidades…",
-      400
-    );
-  }
+      let parent = label.parentElement;
 
-  function leafTextMatches(el, matcher) {
-    if (!visible(el)) return false;
-    if (el.children.length > 3) return false;
-    return matcher(norm(el.textContent));
-  }
+      for (
+        let i = 0;
+        parent && i < 4;
+        i += 1, parent = parent.parentElement
+      ) {
+        const control = [
+          ...parent.querySelectorAll(
+            "button,[role=combobox],[role=button]"
+          )
+        ].find(visible);
 
-  function unitPanelVisible() {
-    const heading = all("h1,h2,h3,h4,strong,span,p,div").find((el) => {
-      if (!leafTextMatches(el, (text) =>
-        text === "chat por unidade" ||
-        text === "selecione uma unidade" ||
-        text === "selecione unidade"
-      )) return false;
+        if (!control) continue;
 
-      const r = el.getBoundingClientRect();
-      return r.left < window.innerWidth * 0.55 && r.top > 100;
-    });
-
-    return Boolean(heading);
-  }
-
-  function santaCruzUnitText() {
-    const matches = all("span,p,strong,div,a,button,[role=button],[tabindex]")
-      .filter((el) => {
-        if (!leafTextMatches(el, (text) => text === "santa cruz" || text.startsWith("santa cruz "))) {
+        if (!safeClick(control, "Selecionando Brasil +55…")) {
           return false;
         }
 
-        const r = el.getBoundingClientRect();
+        setTimeout(() => {
+          const brazil =
+            exactText("Brasil +55") ||
+            exactText("Brasil") ||
+            findContains(
+              "[role=option],[role=menuitem],button,li,div",
+              [["brasil", "+55"], ["brasil"]]
+            );
 
-        // Nunca usar o seletor da conta no topo direito.
-        if (r.top < 150 && r.left > window.innerWidth * 0.55) return false;
+          if (brazil) {
+            safeClick(
+              brazil,
+              "Brasil +55 selecionado.",
+              250
+            );
+          }
+        }, 350);
 
-        // A linha da unidade fica na metade esquerda, abaixo do cabeçalho.
-        return r.left < window.innerWidth * 0.55 && r.top > 140;
-      })
-      .map((el) => {
-        const r = el.getBoundingClientRect();
-        return { el, area: r.width * r.height };
-      })
-      .sort((a, b) => a.area - b.area);
+        return false;
+      }
 
-    return matches[0]?.el || null;
-  }
+      return false;
+    }
 
-  function santaCruzUnitRow() {
-    const text = santaCruzUnitText();
-    if (!text) return null;
+    function validName(input) {
+      return Boolean(
+        input && norm(input.value).includes(norm(lead.nome))
+      );
+    }
 
-    let current = text;
-    let best = clickable(text);
+    function validPhone(input) {
+      if (!input) return false;
 
-    for (let depth = 0; current && depth < 7; depth += 1, current = current.parentElement) {
-      if (!visible(current)) continue;
+      const current = digits(input.value);
+      const expected = digits(lead.phone);
 
-      const r = current.getBoundingClientRect();
-      const style = getComputedStyle(current);
-      const textValue = norm(current.textContent);
+      return current === expected || current.endsWith(expected);
+    }
 
-      const plausibleRow =
-        r.left < window.innerWidth * 0.55 &&
-        r.top > 130 &&
-        r.width >= 110 &&
-        r.width <= 650 &&
-        r.height >= 32 &&
-        r.height <= 150 &&
-        textValue.includes("santa cruz");
+    function fillModal() {
+      showToast("Nova Conversa aberta. Preenchendo o lead…");
 
-      if (!plausibleRow) continue;
+      const name = nameInput();
+      const phone = phoneInput();
+
+      if (name && !validName(name)) setValue(name, lead.nome);
+
+      chooseBrazil();
+
+      if (phone && !validPhone(phone)) {
+        setValue(phone, lead.phone);
+      }
 
       if (
-        current.matches("button,a,[role=button],[tabindex]") ||
-        style.cursor === "pointer"
+        !validName(name) ||
+        !validPhone(phone) ||
+        !countrySelected()
       ) {
-        best = current;
-        break;
-      }
-
-      if (!best || best === text) best = current;
-    }
-
-    return best || text;
-  }
-
-  function clickSantaCruz() {
-    const row = santaCruzUnitRow();
-    if (!row) return false;
-
-    unitClickedAt = Date.now();
-
-    return safeClick(
-      row,
-      "Selecionando a unidade Santa Cruz…",
-      400
-    );
-  }
-
-  function santaCruzChatLoaded() {
-    const heading = all("h1,h2,h3,h4,strong,span,p,div").find((el) => {
-      if (!leafTextMatches(el, (text) =>
-        text === "chat - santa cruz" ||
-        text === "chat santa cruz" ||
-        text.startsWith("chat - santa cruz ")
-      )) return false;
-
-      const r = el.getBoundingClientRect();
-
-      // O título do chat deve estar na área de conteúdo, não no seletor da conta.
-      return r.left > 180 && r.top > 100 && r.top < window.innerHeight * 0.65;
-    });
-
-    if (heading) return true;
-
-    // Outra confirmação forte: o botão Nova Conversa só aparece após a unidade real carregar.
-    return Boolean(newConversationButton());
-  }
-
-  function newConversationButton() {
-    const exact =
-      findExactVisibleText("+ Nova Conversa", "button,a,[role=button],span,div") ||
-      findExactVisibleText("Nova Conversa", "button,a,[role=button],span,div");
-
-    if (exact) return exact;
-
-    return findContains(
-      'button,a,[role=button],[tabindex]',
-      [["nova", "conversa"], ["novo", "contato"], ["iniciar", "conversa"]]
-    );
-  }
-
-  function clickNewConversation() {
-    const button = newConversationButton();
-    if (!button) return false;
-
-    return safeClick(button, "Abrindo Nova Conversa…");
-  }
-
-  function findInputNearLabel(terms) {
-    const labels = all("label,span,div,p").filter(visible);
-
-    for (const label of labels) {
-      const text = norm(label.textContent);
-
-      if (!terms.some((term) => text.includes(norm(term)))) continue;
-
-      if (label.tagName === "LABEL") {
-        const nested = label.querySelector("input");
-        if (nested && visible(nested)) return nested;
-
-        const id = label.getAttribute("for");
-        if (id) {
-          for (const root of roots()) {
-            try {
-              const input = root.getElementById?.(id);
-              if (input instanceof HTMLInputElement && visible(input)) return input;
-            } catch {}
-          }
-        }
-      }
-
-      const lr = label.getBoundingClientRect();
-
-      const nearby = all("input")
-        .filter((input) => {
-          if (!visible(input)) return false;
-          const r = input.getBoundingClientRect();
-
-          return (
-            r.top >= lr.top - 10 &&
-            r.top <= lr.bottom + 120 &&
-            r.left >= lr.left - 50
-          );
-        })
-        .sort(
-          (a, b) =>
-            a.getBoundingClientRect().top - b.getBoundingClientRect().top
-        );
-
-      if (nearby[0]) return nearby[0];
-    }
-
-    return null;
-  }
-
-  function findNameInput() {
-    return (
-      findInputNearLabel(["nome", "nome (opcional)"]) ||
-      findContains("input", [["joao", "silva"], ["nome"]])
-    );
-  }
-
-  function findPhoneInput() {
-    return (
-      findInputNearLabel([
-        "telefone",
-        "telefone (com ddd)",
-        "celular",
-        "whatsapp"
-      ]) ||
-      findContains("input", [["11999998888"], ["telefone"]]) ||
-      all('input[type="tel"]').find(visible) ||
-      null
-    );
-  }
-
-  function modalOpen() {
-    const title = findContains(
-      '[role="dialog"] *,[aria-modal="true"] *,h1,h2,h3,strong,span,div',
-      [["nova", "conversa"]]
-    );
-
-    return Boolean(title && (findNameInput() || findPhoneInput()));
-  }
-
-  function setNativeValue(input, value) {
-    if (!input || !value) return false;
-
-    try {
-      input.focus();
-
-      const proto =
-        input instanceof HTMLInputElement
-          ? HTMLInputElement.prototype
-          : HTMLTextAreaElement.prototype;
-
-      const setter = Object.getOwnPropertyDescriptor(proto, "value")?.set;
-
-      setter ? setter.call(input, "") : (input.value = "");
-      input.dispatchEvent(new Event("input", { bubbles: true }));
-
-      setter ? setter.call(input, value) : (input.value = value);
-      input.dispatchEvent(
-        new InputEvent("input", {
-          bubbles: true,
-          inputType: "insertText",
-          data: value
-        })
-      );
-      input.dispatchEvent(new Event("change", { bubbles: true }));
-      input.blur();
-
-      return true;
-    } catch {
-      return false;
-    }
-  }
-
-  function countrySelected() {
-    return Boolean(
-      findContains('button,[role=combobox],[role=button],div', [
-        ["brasil", "+55"],
-        ["brasil"],
-        ["br", "+55"]
-      ])
-    );
-  }
-
-  function chooseBrazil() {
-    if (countrySelected()) return true;
-
-    const label = findContains("label,span,div,p", [
-      ["pais", "ddi"],
-      ["pais"]
-    ]);
-
-    if (!label) return false;
-
-    let parent = label.parentElement;
-
-    for (let i = 0; parent && i < 4; i += 1, parent = parent.parentElement) {
-      const control = [...parent.querySelectorAll(
-        'button,[role=combobox],[role=button]'
-      )].find(visible);
-
-      if (!control) continue;
-
-      if (!safeClick(control, "Selecionando Brasil +55…")) return false;
-
-      setTimeout(() => {
-        const brazil =
-          findExactVisibleText("Brasil +55") ||
-          findExactVisibleText("Brasil") ||
-          findContains('[role=option],[role=menuitem],button,li,div', [
-            ["brasil", "+55"],
-            ["brasil"]
-          ]);
-
-        if (brazil) safeClick(brazil, "Brasil +55 selecionado.", 250);
-      }, 350);
-
-      return false;
-    }
-
-    return false;
-  }
-
-  function nameValid(input) {
-    return Boolean(
-      input && norm(input.value).includes(norm(lead.nome))
-    );
-  }
-
-  function phoneValid(input) {
-    if (!input) return false;
-    const current = digits(input.value);
-
-    return current === lead.phone || current.endsWith(lead.phone);
-  }
-
-  function fillModal() {
-    showToast("Nova Conversa aberta. Preenchendo o lead…");
-
-    const name = findNameInput();
-    const phone = findPhoneInput();
-
-    if (name && !nameValid(name)) setNativeValue(name, lead.nome);
-
-    chooseBrazil();
-
-    if (phone && !phoneValid(phone)) setNativeValue(phone, lead.phone);
-
-    if (
-      !nameValid(name) ||
-      !phoneValid(phone) ||
-      !countrySelected()
-    ) return false;
-
-    const next = findContains(
-      'button,[role=button]',
-      [["continuar"], ["continue"]]
-    );
-
-    if (
-      !next ||
-      next.disabled ||
-      next.getAttribute("aria-disabled") === "true"
-    ) return false;
-
-    if (!continueClicked) {
-      continueClicked = true;
-      showToast("Dados preenchidos. Clicando em Continuar…");
-
-      setTimeout(() => {
-        safeClick(next, "Avançando para a próxima etapa…", 250);
-        finished = true;
-        cleanParams();
-        sessionStorage.removeItem(STORAGE_KEY);
-      }, 650);
-    }
-
-    return true;
-  }
-
-  function step() {
-    if (finished) return;
-    if (recoverBadDirectRoute()) return;
-
-    if (modalOpen()) {
-      fillModal();
-      return;
-    }
-
-    if (santaCruzChatLoaded()) {
-      const button = newConversationButton();
-
-      if (button) {
-        clickNewConversation();
-      } else {
-        showToast("Santa Cruz selecionada. Aguardando Nova Conversa…");
-      }
-
-      return;
-    }
-
-    if (unitPanelVisible()) {
-      const unit = santaCruzUnitRow();
-
-      if (unit) {
-        if (!unitClickedAt || Date.now() - unitClickedAt > 5000) {
-          clickSantaCruz();
-        } else {
-          showToast("Santa Cruz selecionada. Aguardando o chat carregar…");
-        }
-      } else {
-        showToast("Lista de unidades aberta. Aguardando Santa Cruz aparecer…");
-      }
-
-      return;
-    }
-
-    if (menuClickedAt) {
-      const elapsed = Date.now() - menuClickedAt;
-
-      if (elapsed < 8000) {
-        showToast("Chat Unidades selecionado. Aguardando a lista de unidades…");
         return;
       }
 
-      // Se o painel não carregou em 8 s, reabre o menu e tenta novamente.
-      menuClickedAt = 0;
-      sidebarOpenedAt = 0;
-    }
+      const next = findContains(
+        "button,[role=button]",
+        [["continuar"], ["continue"]]
+      );
 
-    if (sidebarIsExpanded()) {
-      clickChatUnidadesMenu();
-      return;
-    }
+      if (
+        !next ||
+        next.disabled ||
+        next.getAttribute("aria-disabled") === "true"
+      ) {
+        return;
+      }
 
-    if (!sidebarOpenedAt || Date.now() - sidebarOpenedAt > 5000) {
-      clickSidebarIcon();
-      return;
-    }
-
-    showToast("Aguardando o menu de chats abrir…");
-  }
-
-  showToast("Automação iniciada. Abrindo Chat Unidades…");
-
-  const observer = new MutationObserver(() => step());
-
-  observer.observe(document.documentElement, {
-    childList: true,
-    subtree: true,
-    attributes: true,
-    attributeFilter: [
-      "class",
-      "aria-expanded",
-      "aria-selected",
-      "disabled"
-    ]
-  });
-
-  let attempts = 0;
-
-  const timer = setInterval(() => {
-    attempts += 1;
-    step();
-
-    if (finished || attempts > 300) {
-      clearInterval(timer);
-      observer.disconnect();
-
-      if (!finished) {
+      if (!continueClicked) {
+        continueClicked = true;
         showToast(
-          "A automação parou nesta etapa. Envie um print com esta mensagem."
+          "Dados preenchidos. Clicando em Continuar…"
         );
+
+        setTimeout(() => {
+          safeClick(
+            next,
+            "Avançando para a próxima etapa…",
+            250
+          );
+
+          finished = true;
+
+          chrome.storage.local.remove([LEAD_KEY]);
+        }, 650);
       }
     }
-  }, 500);
 
-  step();
+    function step() {
+      if (finished) return;
+
+      if (modalOpen()) {
+        fillModal();
+        return;
+      }
+
+      if (santaCruzChatLoaded()) {
+        const button = newConversationButton();
+
+        if (button) {
+          safeClick(
+            button,
+            "Abrindo Nova Conversa…",
+            400
+          );
+        } else {
+          showToast(
+            "Santa Cruz carregada. Aguardando Nova Conversa…"
+          );
+        }
+
+        return;
+      }
+
+      if (unitPanelVisible()) {
+        const row = santaCruzRow();
+
+        if (row) {
+          if (
+            !santaCruzClickedAt ||
+            Date.now() - santaCruzClickedAt > 5000
+          ) {
+            santaCruzClickedAt = Date.now();
+
+            safeClick(
+              row,
+              "Selecionando a unidade Santa Cruz…",
+              350
+            );
+          } else {
+            showToast(
+              "Santa Cruz selecionada. Aguardando o chat carregar…"
+            );
+          }
+        } else {
+          showToast(
+            "Lista de unidades aberta. Aguardando Santa Cruz aparecer…"
+          );
+        }
+
+        return;
+      }
+
+      const chatOption = chatUnidadesOption();
+
+      if (chatOption) {
+        if (
+          !chatUnidadesClickedAt ||
+          Date.now() - chatUnidadesClickedAt > 5000
+        ) {
+          chatUnidadesClickedAt = Date.now();
+
+          safeClick(
+            chatOption,
+            "Entrando em Chat Unidades…",
+            350
+          );
+        } else {
+          showToast(
+            "Chat Unidades selecionado. Aguardando a lista de unidades…"
+          );
+        }
+
+        return;
+      }
+
+      if (
+        !sidebarClickedAt ||
+        Date.now() - sidebarClickedAt > 5000
+      ) {
+        const icon = sidebarChatIcon();
+
+        if (icon) {
+          sidebarClickedAt = Date.now();
+
+          safeClick(
+            icon,
+            "Abrindo o menu de chats…",
+            350
+          );
+        } else {
+          showToast(
+            "Aguardando o painel do Scale carregar…"
+          );
+        }
+
+        return;
+      }
+
+      showToast(
+        "Menu de chats aberto. Aguardando Chat Unidades…"
+      );
+    }
+
+    showToast(
+      "Lead recebido. Aguardando o Scale carregar com a URL limpa…"
+    );
+
+    const observer = new MutationObserver(() => step());
+
+    observer.observe(document.documentElement, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: [
+        "class",
+        "aria-expanded",
+        "aria-selected",
+        "disabled"
+      ]
+    });
+
+    let attempts = 0;
+
+    const timer = setInterval(() => {
+      attempts += 1;
+      step();
+
+      if (finished || attempts > 300) {
+        clearInterval(timer);
+        observer.disconnect();
+
+        if (!finished) {
+          showToast(
+            "A automação parou nesta etapa. Envie um print com esta mensagem."
+          );
+        }
+      }
+    }, 500);
+
+    step();
+  }
 })();
