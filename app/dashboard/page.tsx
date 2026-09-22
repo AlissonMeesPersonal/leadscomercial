@@ -18,14 +18,19 @@ type Lead = {
 
 const statusList: Status[] = ["Novo", "Em contato", "Interessado", "Sem retorno", "Convertido"];
 
-const TEST_LEAD: Lead = {
-  id: "teste-aisson-mees",
-  nome: "Aisson Mees",
-  whatsapp: "51999303642",
-  email: "",
-  origem: "Teste Scale",
-  status: "Novo",
-  criadoEm: new Date().toISOString()
+const SUPABASE_URL = "https://efahamylmoueniflnvzl.supabase.co";
+const SUPABASE_KEY = "sb_publishable_TD903F8atFHoM64JbiEEFA_qhnm_PhI";
+const COMMERCIAL_ACCESS_KEY = "commercial-supabase-access";
+const LEGACY_STORAGE_KEY = "leads-comercial";
+
+type DbLead = {
+  id: string;
+  name: string;
+  whatsapp: string | null;
+  email: string | null;
+  source: string;
+  status: Status;
+  created_at: string;
 };
 
 function onlyDigits(value: string) {
@@ -36,6 +41,65 @@ function normalizeWhatsApp(value: string) {
   let digits = onlyDigits(value);
   if (digits.length === 10 || digits.length === 11) digits = "55" + digits;
   return digits;
+}
+
+function leadKey(lead: Pick<Lead, "whatsapp" | "email">) {
+  return (normalizeWhatsApp(lead.whatsapp) || lead.email.toLowerCase().trim()).trim();
+}
+
+function dbToLead(row: DbLead): Lead {
+  return {
+    id: row.id,
+    nome: row.name || "",
+    whatsapp: row.whatsapp || "",
+    email: row.email || "",
+    origem: row.source || "Importação",
+    status: row.status,
+    criadoEm: row.created_at
+  };
+}
+
+function toDbLead(lead: Lead) {
+  return {
+    name: lead.nome.trim(),
+    whatsapp: lead.whatsapp.trim() || null,
+    email: lead.email.trim() || null,
+    source: lead.origem || "Importação",
+    status: lead.status
+  };
+}
+
+async function supabaseRequest(path: string, init: RequestInit = {}) {
+  const access = sessionStorage.getItem(COMMERCIAL_ACCESS_KEY);
+
+  if (!access) {
+    throw new Error("Sua sessão de dados expirou. Entre novamente.");
+  }
+
+  const headers = new Headers(init.headers);
+  headers.set("apikey", SUPABASE_KEY);
+  headers.set("x-client-info", access);
+
+  if (init.body && !headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
+  }
+
+  const response = await fetch(SUPABASE_URL + path, {
+    ...init,
+    headers
+  });
+
+  if (!response.ok) {
+    const detail = await response.text().catch(() => "");
+    console.error("[Leads Comercial] Supabase:", response.status, detail);
+    throw new Error(
+      response.status === 401 || response.status === 403
+        ? "Acesso ao banco recusado. Entre novamente no painel."
+        : "Não foi possível salvar os leads no banco agora."
+    );
+  }
+
+  return response;
 }
 
 function firstValue(row: Record<string, unknown>, keys: string[]) {
@@ -97,23 +161,75 @@ export default function DashboardPage() {
   const [processing, setProcessing] = useState(false);
 
   useEffect(() => {
-    const saved = localStorage.getItem("leads-comercial");
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        setLeads(Array.isArray(parsed) && parsed.length ? parsed : [TEST_LEAD]);
-      } catch {
-        setLeads([TEST_LEAD]);
-      }
-    } else {
-      setLeads([TEST_LEAD]);
-    }
-    setLoaded(true);
-  }, []);
+    let cancelled = false;
 
-  useEffect(() => {
-    if (loaded) localStorage.setItem("leads-comercial", JSON.stringify(leads));
-  }, [leads, loaded]);
+    async function loadLeads() {
+      if (!sessionStorage.getItem(COMMERCIAL_ACCESS_KEY)) {
+        location.href = "/login";
+        return;
+      }
+
+      try {
+        const response = await supabaseRequest(
+          "/rest/v1/commercial_leads?select=id,name,whatsapp,email,source,status,created_at&order=created_at.desc"
+        );
+        const rows = (await response.json()) as DbLead[];
+        let remote = rows.map(dbToLead);
+
+        // Migra uma única vez os leads que ainda estavam salvos neste navegador.
+        const legacy = localStorage.getItem(LEGACY_STORAGE_KEY);
+
+        if (legacy) {
+          try {
+            const parsed = JSON.parse(legacy) as Lead[];
+            const localLeads = Array.isArray(parsed) ? parsed : [];
+            const seen = new Set(remote.map(leadKey).filter(Boolean));
+
+            const missing = localLeads.filter((lead) => {
+              const key = leadKey(lead);
+              if (!key || seen.has(key)) return false;
+              seen.add(key);
+              return true;
+            });
+
+            if (missing.length) {
+              const migrated = await supabaseRequest(
+                "/rest/v1/commercial_leads?select=id,name,whatsapp,email,source,status,created_at",
+                {
+                  method: "POST",
+                  headers: { Prefer: "return=representation" },
+                  body: JSON.stringify(missing.map(toDbLead))
+                }
+              );
+              const savedRows = (await migrated.json()) as DbLead[];
+              remote = [...savedRows.map(dbToLead), ...remote];
+            }
+
+            localStorage.removeItem(LEGACY_STORAGE_KEY);
+          } catch (migrationError) {
+            console.error("[Leads Comercial] Migração local:", migrationError);
+          }
+        }
+
+        if (!cancelled) {
+          setLeads(remote);
+          setNotice("");
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setNotice(err instanceof Error ? err.message : "Não foi possível carregar os leads.");
+        }
+      } finally {
+        if (!cancelled) setLoaded(true);
+      }
+    }
+
+    loadLeads();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const filtered = useMemo(() => {
     const q = query.toLowerCase();
@@ -124,20 +240,34 @@ export default function DashboardPage() {
     });
   }, [leads, query, statusFilter]);
 
-  function addImported(items: Lead[]) {
-    let added = 0;
-    setLeads((current) => {
-      const seen = new Set(current.map((l) => (normalizeWhatsApp(l.whatsapp) || l.email.toLowerCase()).trim()).filter(Boolean));
-      const fresh = items.filter((l) => {
-        const key = (normalizeWhatsApp(l.whatsapp) || l.email.toLowerCase()).trim();
-        if (!key || seen.has(key)) return false;
-        seen.add(key);
-        added++;
-        return true;
-      });
-      return [...fresh, ...current];
+  async function addImported(items: Lead[]) {
+    const seen = new Set(leads.map(leadKey).filter(Boolean));
+    const fresh = items.filter((lead) => {
+      const key = leadKey(lead);
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
     });
-    setNotice(added ? `${added} lead(s) importado(s) com sucesso.` : "Nenhum lead novo foi encontrado.");
+
+    if (!fresh.length) {
+      setNotice("Nenhum lead novo foi encontrado.");
+      return;
+    }
+
+    const response = await supabaseRequest(
+      "/rest/v1/commercial_leads?select=id,name,whatsapp,email,source,status,created_at",
+      {
+        method: "POST",
+        headers: { Prefer: "return=representation" },
+        body: JSON.stringify(fresh.map(toDbLead))
+      }
+    );
+
+    const savedRows = (await response.json()) as DbLead[];
+    const saved = savedRows.map(dbToLead);
+
+    setLeads((current) => [...saved, ...current]);
+    setNotice(`${saved.length} lead(s) importado(s) e salvos no Supabase.`);
   }
 
   async function handleFile(event: ChangeEvent<HTMLInputElement>) {
@@ -184,7 +314,7 @@ export default function DashboardPage() {
         throw new Error("Formato ainda não suportado. Use planilhas, CSV/TSV, PDF, DOCX, TXT ou JSON.");
       }
 
-      addImported(imported);
+      await addImported(imported);
     } catch (err) {
       setNotice(err instanceof Error ? err.message : "Não foi possível importar o arquivo.");
     } finally {
@@ -193,12 +323,40 @@ export default function DashboardPage() {
     }
   }
 
-  function updateStatus(id: string, status: Status) {
-    setLeads((current) => current.map((lead) => lead.id === id ? { ...lead, status } : lead));
+  async function updateStatus(id: string, status: Status) {
+    try {
+      const response = await supabaseRequest(
+        `/rest/v1/commercial_leads?id=eq.${encodeURIComponent(id)}&select=id,name,whatsapp,email,source,status,created_at`,
+        {
+          method: "PATCH",
+          headers: { Prefer: "return=representation" },
+          body: JSON.stringify({ status })
+        }
+      );
+
+      const rows = (await response.json()) as DbLead[];
+      if (!rows.length) throw new Error("Lead não encontrado no banco.");
+
+      const saved = dbToLead(rows[0]);
+      setLeads((current) =>
+        current.map((lead) => (lead.id === id ? saved : lead))
+      );
+    } catch (err) {
+      setNotice(err instanceof Error ? err.message : "Não foi possível atualizar o status.");
+    }
   }
 
-  function removeLead(id: string) {
-    setLeads((current) => current.filter((lead) => lead.id !== id));
+  async function removeLead(id: string) {
+    try {
+      await supabaseRequest(
+        `/rest/v1/commercial_leads?id=eq.${encodeURIComponent(id)}`,
+        { method: "DELETE" }
+      );
+      setLeads((current) => current.filter((lead) => lead.id !== id));
+      setNotice("Lead excluído do Supabase.");
+    } catch (err) {
+      setNotice(err instanceof Error ? err.message : "Não foi possível excluir o lead.");
+    }
   }
 
   async function startScale(lead: Lead) {
@@ -212,7 +370,7 @@ export default function DashboardPage() {
       );
     } catch {}
 
-    updateStatus(lead.id, "Em contato");
+    void updateStatus(lead.id, "Em contato");
     setNotice(`Procurando uma aba do Scale para ${lead.nome}…`);
 
     let answered = false;
@@ -278,6 +436,7 @@ export default function DashboardPage() {
   }
 
   async function logout() {
+    sessionStorage.removeItem(COMMERCIAL_ACCESS_KEY);
     await fetch("/api/logout", { method: "POST" });
     location.href = "/login";
   }
@@ -294,7 +453,7 @@ export default function DashboardPage() {
         <div className="topbar-actions">
           <ThemeToggle />
           <input ref={inputRef} type="file" accept=".xlsx,.xls,.xlsm,.xlsb,.ods,.csv,.tsv,.pdf,.docx,.txt,.json" onChange={handleFile} hidden />
-          <button className="primary-btn small" onClick={() => inputRef.current?.click()} disabled={processing}>
+          <button className="primary-btn small" onClick={() => inputRef.current?.click()} disabled={processing || !loaded}>
             {processing ? "Importando..." : "+ Importar leads"}
           </button>
           <button className="ghost-btn" onClick={logout}>Sair</button>
@@ -343,7 +502,7 @@ export default function DashboardPage() {
                     <td>{lead.email || "—"}</td>
                     <td className="origin">{lead.origem}</td>
                     <td>
-                      <select className="status-select" value={lead.status} onChange={(e) => updateStatus(lead.id, e.target.value as Status)}>
+                      <select className="status-select" value={lead.status} onChange={(e) => void updateStatus(lead.id, e.target.value as Status)}>
                         {statusList.map((s) => <option key={s}>{s}</option>)}
                       </select>
                     </td>
@@ -352,7 +511,7 @@ export default function DashboardPage() {
                         {wa && <button className="scale-btn" onClick={() => startScale(lead)}>Iniciar no Scale</button>}
                         {wa && <a className="wa-btn" href={`https://wa.me/${wa}?text=${text}`} target="_blank" rel="noreferrer">WhatsApp</a>}
                         {lead.email && <a className="mail-btn" href={`mailto:${lead.email}`}>E-mail</a>}
-                        <button className="delete-btn" onClick={() => removeLead(lead.id)}>Excluir</button>
+                        <button className="delete-btn" onClick={() => void removeLead(lead.id)}>Excluir</button>
                       </div>
                     </td>
                   </tr>
@@ -364,7 +523,7 @@ export default function DashboardPage() {
         </div>
       </section>
 
-      <p className="footer-note">Os dados desta primeira versão ficam salvos neste navegador. Para vários usuários/equipe em tempo real, conectaremos o painel ao Supabase.</p>
+      <p className="footer-note">Os leads estão salvos no Supabase e permanecem disponíveis mesmo ao trocar de navegador ou computador.</p>
     </main>
   );
 }
