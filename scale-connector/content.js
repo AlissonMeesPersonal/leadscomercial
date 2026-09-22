@@ -1,32 +1,28 @@
 (() => {
-  const STORAGE_KEY = "lc_scale_automation_v2";
+  const STORAGE_KEY = "lc_scale_automation_v3";
   const params = new URLSearchParams(window.location.search);
 
-  function digits(value) {
-    return String(value || "").replace(/\D/g, "");
-  }
-
-  function normalizeText(value) {
-    return String(value || "")
+  const digits = (value) => String(value || "").replace(/\D/g, "");
+  const normalizeText = (value) =>
+    String(value || "")
       .normalize("NFD")
       .replace(/[\u0300-\u036f]/g, "")
       .replace(/\s+/g, " ")
       .trim()
       .toLowerCase();
-  }
 
   if (params.get("lc_auto") === "1") {
-    const lead = {
-      nome: params.get("lc_nome") || "",
-      ddi: digits(params.get("lc_ddi") || "55"),
-      phone: digits(params.get("lc_phone") || "")
-    };
-
-    sessionStorage.setItem(STORAGE_KEY, JSON.stringify({
-      lead,
-      createdAt: Date.now(),
-      stage: "open"
-    }));
+    sessionStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({
+        lead: {
+          nome: params.get("lc_nome") || "",
+          ddi: digits(params.get("lc_ddi") || "55"),
+          phone: digits(params.get("lc_phone") || "")
+        },
+        createdAt: Date.now()
+      })
+    );
   }
 
   let saved;
@@ -41,37 +37,34 @@
   const lead = saved.lead;
   let finished = false;
   let continueClicked = false;
-  let lastNewConversationClick = 0;
-  let lastCountryClick = 0;
+  let lastActionAt = 0;
+  let lastMessage = "";
 
   function visible(el) {
     if (!el || !(el instanceof Element)) return false;
     const style = getComputedStyle(el);
     if (style.display === "none" || style.visibility === "hidden" || Number(style.opacity) === 0) return false;
     const rect = el.getBoundingClientRect();
-    return rect.width > 1 && rect.height > 1;
+    return rect.width > 2 && rect.height > 2;
   }
 
-  function deepRoots(root = document) {
-    const roots = [root];
-    const queue = [root];
+  function roots() {
+    const result = [document];
+    const queue = [document];
 
     while (queue.length) {
-      const current = queue.shift();
-
+      const root = queue.shift();
       try {
-        for (const el of current.querySelectorAll("*")) {
+        for (const el of root.querySelectorAll("*")) {
           if (el.shadowRoot) {
-            roots.push(el.shadowRoot);
+            result.push(el.shadowRoot);
             queue.push(el.shadowRoot);
           }
-
           if (el instanceof HTMLIFrameElement) {
             try {
-              const doc = el.contentDocument;
-              if (doc) {
-                roots.push(doc);
-                queue.push(doc);
+              if (el.contentDocument) {
+                result.push(el.contentDocument);
+                queue.push(el.contentDocument);
               }
             } catch {}
           }
@@ -79,103 +72,265 @@
       } catch {}
     }
 
-    return roots;
+    return result;
   }
 
   function all(selector) {
-    const out = [];
+    const output = [];
     const seen = new Set();
 
-    for (const root of deepRoots()) {
+    for (const root of roots()) {
       try {
-        for (const el of root.querySelectorAll(selector)) {
+        root.querySelectorAll(selector).forEach((el) => {
           if (!seen.has(el)) {
             seen.add(el);
-            out.push(el);
+            output.push(el);
           }
-        }
+        });
       } catch {}
     }
 
-    return out;
+    return output;
   }
 
-  function elementWords(el) {
-    return normalizeText([
-      el.textContent,
-      el.getAttribute?.("aria-label"),
-      el.getAttribute?.("title"),
-      el.getAttribute?.("placeholder"),
-      el.getAttribute?.("data-testid"),
-      el.getAttribute?.("name")
-    ].filter(Boolean).join(" "));
+  function words(el) {
+    return normalizeText(
+      [
+        el?.textContent,
+        el?.getAttribute?.("aria-label"),
+        el?.getAttribute?.("title"),
+        el?.getAttribute?.("placeholder"),
+        el?.getAttribute?.("data-testid"),
+        el?.getAttribute?.("name")
+      ]
+        .filter(Boolean)
+        .join(" ")
+    );
   }
 
-  function findByWords(selector, groups) {
-    return all(selector).find((el) => {
-      if (!visible(el)) return false;
-      const text = elementWords(el);
-      return groups.some((group) => group.every((word) => text.includes(normalizeText(word))));
-    }) || null;
+  function findText(selector, groups) {
+    return (
+      all(selector).find((el) => {
+        if (!visible(el)) return false;
+        const text = words(el);
+        return groups.some((group) => group.every((word) => text.includes(normalizeText(word))));
+      }) || null
+    );
   }
 
-  function nearestClickable(el) {
+  function clickable(el) {
     if (!el) return null;
-    return el.closest("button, a, [role=button], [role=menuitem]") || el;
+    return el.closest("button,a,[role=button],[role=menuitem],[tabindex]") || el;
   }
 
-  function findInputNearLabel(words) {
-    const labels = all("label, span, div, p");
-    const label = labels.find((el) => {
-      if (!visible(el)) return false;
-      const txt = normalizeText(el.textContent);
-      return words.some((word) => txt === normalizeText(word) || txt.startsWith(normalizeText(word)));
-    });
+  function safeClick(el, message) {
+    const target = clickable(el);
+    if (!target || !visible(target)) return false;
 
-    if (!label) return null;
+    const now = Date.now();
+    if (now - lastActionAt < 700) return false;
+    lastActionAt = now;
 
-    if (label.tagName === "LABEL") {
-      const direct = label.querySelector("input");
-      if (direct && visible(direct)) return direct;
+    try {
+      target.scrollIntoView({ block: "center", inline: "center" });
+    } catch {}
 
-      const forId = label.getAttribute("for");
-      if (forId) {
-        for (const root of deepRoots()) {
-          try {
-            const target = root.getElementById?.(forId);
-            if (target instanceof HTMLInputElement && visible(target)) return target;
-          } catch {}
-        }
-      }
+    try {
+      target.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true }));
+      target.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+      target.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+      target.click();
+      if (message) showToast(message);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  function showToast(message) {
+    if (message === lastMessage) return;
+    lastMessage = message;
+
+    let toast = document.getElementById("lc-scale-toast");
+    if (!toast) {
+      toast = document.createElement("div");
+      toast.id = "lc-scale-toast";
+      Object.assign(toast.style, {
+        position: "fixed",
+        right: "18px",
+        bottom: "18px",
+        zIndex: "2147483647",
+        padding: "12px 16px",
+        borderRadius: "12px",
+        background: "#101936",
+        color: "#fff",
+        border: "1px solid rgba(255,255,255,.18)",
+        boxShadow: "0 12px 30px rgba(0,0,0,.28)",
+        font: "600 13px Arial, sans-serif",
+        maxWidth: "390px"
+      });
+      document.documentElement.appendChild(toast);
     }
 
-    const labelRect = label.getBoundingClientRect();
-    const candidates = all("input").filter((input) => {
-      if (!visible(input)) return false;
-      const r = input.getBoundingClientRect();
-      const verticalDistance = r.top - labelRect.bottom;
-      const horizontalOverlap = r.right >= labelRect.left && r.left <= labelRect.right + 500;
-      return verticalDistance >= -10 && verticalDistance < 120 && horizontalOverlap;
+    toast.textContent = "Leads Comercial: " + message;
+  }
+
+  function cleanParams() {
+    try {
+      const url = new URL(location.href);
+      ["lc_auto", "lc_nome", "lc_ddi", "lc_phone"].forEach((key) => url.searchParams.delete(key));
+      history.replaceState(history.state, "", url.toString());
+    } catch {}
+  }
+
+  function routeIsChatUnidades() {
+    return location.pathname.includes("/chat-unidades");
+  }
+
+  function goToCorrectRoute() {
+    if (routeIsChatUnidades()) return false;
+
+    const url = new URL("https://scale.26fit.com.br/d/chat-unidades");
+    url.searchParams.set("lc_auto", "1");
+    url.searchParams.set("lc_nome", lead.nome);
+    url.searchParams.set("lc_ddi", lead.ddi || "55");
+    url.searchParams.set("lc_phone", lead.phone);
+
+    showToast("Abrindo o módulo correto: Chat Unidades…");
+    location.assign(url.toString());
+    return true;
+  }
+
+  function modalOpen() {
+    const title = findText(
+      '[role="dialog"] *, [aria-modal="true"] *, h1,h2,h3,strong,span,div',
+      [["nova", "conversa"]]
+    );
+    return Boolean(title && (findNameInput() || findPhoneInput()));
+  }
+
+  function findUnitPanel() {
+    return findText("h1,h2,h3,strong,span,div", [["chat", "por", "unidade"]]);
+  }
+
+  function unitNeedsSelection() {
+    return Boolean(
+      findText("h1,h2,h3,p,span,div", [
+        ["selecione", "uma", "unidade"],
+        ["selecionar", "uma", "unidade"]
+      ])
+    );
+  }
+
+  function clickSantaCruzUnit() {
+    const candidates = all("button,a,[role=button],[tabindex],div").filter((el) => {
+      if (!visible(el)) return false;
+      const text = words(el);
+      if (!text.includes("santa cruz")) return false;
+
+      const rect = el.getBoundingClientRect();
+      const leftSide = rect.left < window.innerWidth * 0.48;
+      const belowHeader = rect.top > 160;
+      const notTopAccount = rect.top > 110;
+      return leftSide && belowHeader && notTopAccount;
     });
 
-    return candidates.sort((a, b) => {
-      const ra = a.getBoundingClientRect();
-      const rb = b.getBoundingClientRect();
-      return Math.abs(ra.top - labelRect.bottom) - Math.abs(rb.top - labelRect.bottom);
-    })[0] || null;
+    candidates.sort((a, b) => {
+      const ar = a.getBoundingClientRect();
+      const br = b.getBoundingClientRect();
+
+      const aScore =
+        (a.matches("button,a,[role=button],[tabindex]") ? 10 : 0) +
+        (ar.left < 600 ? 5 : 0) +
+        (ar.width > 120 ? 2 : 0);
+
+      const bScore =
+        (b.matches("button,a,[role=button],[tabindex]") ? 10 : 0) +
+        (br.left < 600 ? 5 : 0) +
+        (br.width > 120 ? 2 : 0);
+
+      return bScore - aScore;
+    });
+
+    if (candidates[0]) {
+      return safeClick(candidates[0], "Selecionando a unidade Santa Cruz…");
+    }
+
+    return false;
+  }
+
+  function newConversationVisible() {
+    return findText('button,a,[role=button]', [["nova", "conversa"]]);
+  }
+
+  function clickNewConversation() {
+    const button = newConversationVisible();
+    if (button) return safeClick(button, "Abrindo Nova Conversa…");
+    return false;
+  }
+
+  function clickChatUnidadesFallback() {
+    const item = findText(
+      'button,a,[role=button],[role=menuitem],span,div',
+      [["chat", "unidades"], ["chat", "por", "unidade"]]
+    );
+
+    if (item) return safeClick(item, "Entrando em Chat Unidades…");
+
+    const chats = findText(
+      'button,a,[role=button],[role=menuitem],span,div',
+      [["chats"]]
+    );
+
+    if (chats) return safeClick(chats, "Abrindo o menu Chats…");
+
+    return false;
+  }
+
+  function findInputNearLabel(labelTerms) {
+    const labels = all("label,span,div,p").filter((el) => visible(el));
+
+    for (const label of labels) {
+      const text = normalizeText(label.textContent);
+      if (!labelTerms.some((term) => text.includes(normalizeText(term)))) continue;
+
+      if (label.tagName === "LABEL") {
+        const nested = label.querySelector("input");
+        if (nested && visible(nested)) return nested;
+
+        const id = label.getAttribute("for");
+        if (id) {
+          const input = document.getElementById(id);
+          if (input instanceof HTMLInputElement && visible(input)) return input;
+        }
+      }
+
+      const lr = label.getBoundingClientRect();
+      const nearby = all("input")
+        .filter((input) => {
+          if (!visible(input)) return false;
+          const r = input.getBoundingClientRect();
+          return r.top >= lr.top - 10 && r.top <= lr.bottom + 115 && r.left >= lr.left - 30;
+        })
+        .sort((a, b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top);
+
+      if (nearby[0]) return nearby[0];
+    }
+
+    return null;
   }
 
   function findNameInput() {
     return (
       findInputNearLabel(["nome", "nome (opcional)"]) ||
-      findByWords("input", [["joao", "silva"], ["nome"]])
+      findText("input", [["joao", "silva"], ["nome"]])
     );
   }
 
   function findPhoneInput() {
     return (
       findInputNearLabel(["telefone", "telefone (com ddd)", "celular", "whatsapp"]) ||
-      findByWords("input", [["11999998888"], ["telefone"], ["phone"]]) ||
+      findText("input", [["11999998888"], ["telefone"]]) ||
       all('input[type="tel"]').find(visible) ||
       null
     );
@@ -186,301 +341,148 @@
 
     try {
       input.focus();
-      const prototype = input instanceof HTMLInputElement ? HTMLInputElement.prototype : HTMLTextAreaElement.prototype;
-      const setter = Object.getOwnPropertyDescriptor(prototype, "value")?.set;
+      const proto = input instanceof HTMLInputElement ? HTMLInputElement.prototype : HTMLTextAreaElement.prototype;
+      const setter = Object.getOwnPropertyDescriptor(proto, "value")?.set;
 
-      if (setter) setter.call(input, "");
-      else input.value = "";
+      setter ? setter.call(input, "") : (input.value = "");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
 
-      input.dispatchEvent(new InputEvent("input", {
-        bubbles: true,
-        inputType: "deleteContentBackward",
-        data: null
-      }));
-
-      if (setter) setter.call(input, value);
-      else input.value = value;
-
-      input.dispatchEvent(new InputEvent("input", {
-        bubbles: true,
-        inputType: "insertText",
-        data: value
-      }));
+      setter ? setter.call(input, value) : (input.value = value);
+      input.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: value }));
       input.dispatchEvent(new Event("change", { bubbles: true }));
-      input.dispatchEvent(new KeyboardEvent("keyup", { bubbles: true, key: "Unidentified" }));
+      input.dispatchEvent(new KeyboardEvent("keyup", { bubbles: true, key: "Tab" }));
       input.blur();
-      return digits(input.value).includes(digits(value)) || normalizeText(input.value).includes(normalizeText(value));
+      return true;
     } catch {
-      try {
-        input.value = value;
-        input.dispatchEvent(new Event("input", { bubbles: true }));
-        input.dispatchEvent(new Event("change", { bubbles: true }));
-        return true;
-      } catch {
+      return false;
+    }
+  }
+
+  function countrySelected() {
+    return Boolean(
+      findText('button,[role=combobox],[role=button],div', [
+        ["brasil", "+55"],
+        ["brasil"],
+        ["br", "+55"]
+      ])
+    );
+  }
+
+  function chooseBrazil() {
+    if (countrySelected()) return true;
+
+    const label = findText("label,span,div,p", [["pais", "ddi"], ["pais"]]);
+    if (!label) return false;
+
+    let parent = label.parentElement;
+    for (let i = 0; parent && i < 4; i += 1, parent = parent.parentElement) {
+      const control = [...parent.querySelectorAll('button,[role=combobox],[role=button]')].find(visible);
+      if (control) {
+        if (!safeClick(control, "Selecionando Brasil +55…")) return false;
+
+        setTimeout(() => {
+          const brazil = findText(
+            '[role=option],[role=menuitem],button,li,div',
+            [["brasil", "+55"], ["brasil"], ["brazil", "+55"]]
+          );
+          if (brazil) safeClick(brazil, "Brasil +55 selecionado.");
+        }, 300);
+
         return false;
       }
     }
-  }
-
-  function isNewConversationModalOpen() {
-    if (findNameInput() && findPhoneInput()) return true;
-
-    const title = findByWords(
-      '[role="dialog"] *, [aria-modal="true"] *, h1, h2, h3, strong, span, div',
-      [["nova", "conversa"]]
-    );
-
-    return Boolean(title && visible(title));
-  }
-
-  function clickNewConversation() {
-    if (isNewConversationModalOpen()) return true;
-
-    const now = Date.now();
-    if (now - lastNewConversationClick < 1200) return false;
-
-    const direct = findByWords(
-      'button, a, [role="button"], [role="menuitem"]',
-      [
-        ["nova", "conversa"],
-        ["novo", "contato"],
-        ["iniciar", "conversa"],
-        ["new", "conversation"]
-      ]
-    );
-
-    if (direct) {
-      lastNewConversationClick = now;
-      nearestClickable(direct).click();
-      showToast("Abrindo Nova Conversa no Scale…");
-      return true;
-    }
-
-    const headings = all("h1,h2,h3,h4,strong,span,div").filter((el) => {
-      if (!visible(el)) return false;
-      const txt = normalizeText(el.textContent);
-      return txt === "conversas" || txt === "conversa";
-    });
-
-    for (const heading of headings) {
-      let box = heading.parentElement;
-
-      for (let depth = 0; box && depth < 5; depth += 1, box = box.parentElement) {
-        const buttons = [...box.querySelectorAll("button,[role=button]")].filter(visible);
-
-        const scored = buttons
-          .map((button) => {
-            const words = elementWords(button);
-            const rect = button.getBoundingClientRect();
-            const hrect = heading.getBoundingClientRect();
-            let score = 0;
-
-            if (words.includes("nova")) score += 10;
-            if (words.includes("conversa")) score += 10;
-            if (words.includes("novo")) score += 8;
-            if (words.includes("adicionar")) score += 6;
-            if (words.includes("add")) score += 4;
-            if (rect.top <= hrect.bottom + 90) score += 3;
-            if (rect.left >= hrect.left) score += 2;
-            if (button.querySelector("svg")) score += 1;
-
-            return { button, score };
-          })
-          .filter((item) => item.score >= 4)
-          .sort((a, b) => b.score - a.score);
-
-        if (scored[0]) {
-          lastNewConversationClick = now;
-          scored[0].button.click();
-          showToast("Abrindo Nova Conversa no Scale…");
-          return true;
-        }
-      }
-    }
 
     return false;
   }
 
-  function countryControl() {
-    const alreadyBrazil = findByWords(
-      'button, [role="combobox"], [role="button"], div',
-      [["brasil", "+55"], ["brasil"], ["br", "+55"]]
-    );
-
-    if (alreadyBrazil) return { selected: true, control: nearestClickable(alreadyBrazil) };
-
-    const labels = all("label, span, div, p").filter((el) => {
-      if (!visible(el)) return false;
-      const txt = normalizeText(el.textContent);
-      return txt.includes("pais") && (txt.includes("ddi") || txt === "pais");
-    });
-
-    for (const label of labels) {
-      let parent = label.parentElement;
-
-      for (let depth = 0; parent && depth < 4; depth += 1, parent = parent.parentElement) {
-        const control = [...parent.querySelectorAll('button,[role="combobox"],[role="button"]')].find(visible);
-        if (control) return { selected: false, control };
-      }
-    }
-
-    return { selected: false, control: null };
+  function nameValid(input) {
+    return Boolean(input && normalizeText(input.value).includes(normalizeText(lead.nome)));
   }
 
-  function selectBrazil() {
-    const country = countryControl();
-    if (country.selected) return true;
-    if (!country.control) return false;
-
-    const now = Date.now();
-    if (now - lastCountryClick < 1000) return false;
-
-    lastCountryClick = now;
-    country.control.click();
-
-    setTimeout(() => {
-      const brazil = findByWords(
-        '[role="option"], [role="menuitem"], button, li, div',
-        [["brasil", "+55"], ["brasil"], ["brazil", "+55"]]
-      );
-
-      if (brazil) nearestClickable(brazil).click();
-    }, 250);
-
-    return false;
-  }
-
-  function validPhoneValue(input) {
+  function phoneValid(input) {
     if (!input) return false;
     const current = digits(input.value);
-    const expected = digits(lead.phone);
-    return current === expected || current.endsWith(expected) || expected.endsWith(current);
+    return current === lead.phone || current.endsWith(lead.phone);
   }
 
-  function validNameValue(input) {
-    if (!input) return false;
-    return normalizeText(input.value).includes(normalizeText(lead.nome));
-  }
+  function fillModal() {
+    showToast("Nova Conversa aberta. Preenchendo o lead…");
 
-  function clickContinueIfReady(nameInput, phoneInput) {
-    if (continueClicked) return true;
-    if (!validNameValue(nameInput) || !validPhoneValue(phoneInput)) return false;
-    if (!countryControl().selected) return false;
+    const name = findNameInput();
+    const phone = findPhoneInput();
 
-    const button = findByWords(
-      'button, [role="button"]',
-      [["continuar"], ["continue"]]
-    );
+    if (name && !nameValid(name)) setNativeValue(name, lead.nome);
+    chooseBrazil();
+    if (phone && !phoneValid(phone)) setNativeValue(phone, lead.phone);
 
-    if (!button || !visible(button)) return false;
-    if (button.disabled || button.getAttribute("aria-disabled") === "true") return false;
+    if (!nameValid(name) || !phoneValid(phone) || !countrySelected()) return false;
 
-    continueClicked = true;
-    showToast("Dados conferidos. Avançando no Scale…");
+    const next = findText('button,[role=button]', [["continuar"], ["continue"]]);
+    if (!next || next.disabled || next.getAttribute("aria-disabled") === "true") return false;
 
-    setTimeout(() => {
-      nearestClickable(button).click();
-
-      const state = {
-        lead,
-        createdAt: saved.createdAt,
-        stage: "continued"
-      };
-      sessionStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-    }, 650);
-
-    return true;
-  }
-
-  function showToast(message) {
-    let toast = document.getElementById("lc-scale-toast");
-
-    if (!toast) {
-      toast = document.createElement("div");
-      toast.id = "lc-scale-toast";
-      Object.assign(toast.style, {
-        position: "fixed",
-        right: "20px",
-        bottom: "20px",
-        zIndex: "2147483647",
-        padding: "12px 16px",
-        borderRadius: "12px",
-        background: "#101936",
-        color: "#fff",
-        border: "1px solid rgba(255,255,255,.18)",
-        boxShadow: "0 12px 30px rgba(0,0,0,.28)",
-        font: "600 13px Arial, sans-serif",
-        maxWidth: "360px"
-      });
-
-      document.documentElement.appendChild(toast);
+    if (!continueClicked) {
+      continueClicked = true;
+      showToast("Dados preenchidos. Clicando em Continuar…");
+      setTimeout(() => {
+        safeClick(next, "Avançando para a próxima etapa…");
+        finished = true;
+        cleanParams();
+        sessionStorage.removeItem(STORAGE_KEY);
+      }, 600);
     }
 
-    toast.textContent = "Leads Comercial: " + message;
-  }
-
-  function clearAutomationParams() {
-    try {
-      const url = new URL(window.location.href);
-      ["lc_auto", "lc_nome", "lc_ddi", "lc_phone"].forEach((key) => url.searchParams.delete(key));
-      history.replaceState(history.state, "", url.toString());
-    } catch {}
+    return true;
   }
 
   function step() {
     if (finished) return;
 
-    if (!isNewConversationModalOpen()) {
+    if (!routeIsChatUnidades()) {
+      goToCorrectRoute();
+      return;
+    }
+
+    if (modalOpen()) {
+      fillModal();
+      return;
+    }
+
+    if (newConversationVisible()) {
       clickNewConversation();
       return;
     }
 
-    showToast("Nova Conversa localizada. Preenchendo o contato…");
-
-    const nameInput = findNameInput();
-    const phoneInput = findPhoneInput();
-
-    if (nameInput && !validNameValue(nameInput)) {
-      setNativeValue(nameInput, lead.nome);
+    if (findUnitPanel() && unitNeedsSelection()) {
+      if (!clickSantaCruzUnit()) {
+        showToast("Chat por Unidade aberto. Aguardando a unidade Santa Cruz aparecer…");
+      }
+      return;
     }
 
-    selectBrazil();
-
-    if (phoneInput && !validPhoneValue(phoneInput)) {
-      setNativeValue(phoneInput, lead.phone);
+    if (findUnitPanel()) {
+      showToast("Unidade carregando. Aguardando o botão Nova Conversa…");
+      return;
     }
 
-    if (clickContinueIfReady(nameInput, phoneInput)) {
-      setTimeout(() => {
-        finished = true;
-        clearAutomationParams();
-        showToast("Contato avançado. Agora o Scale pode solicitar o template aprovado.");
-      }, 1200);
+    if (!clickChatUnidadesFallback()) {
+      showToast("Aguardando o menu Chat Unidades carregar…");
     }
   }
 
-  showToast("Automação recebida. Aguardando o Scale carregar…");
+  showToast("Automação iniciada. Abrindo Chat Unidades…");
 
   const observer = new MutationObserver(() => step());
-  observer.observe(document.documentElement, {
-    childList: true,
-    subtree: true,
-    attributes: true,
-    attributeFilter: ["disabled", "aria-disabled", "value"]
-  });
+  observer.observe(document.documentElement, { childList: true, subtree: true });
 
   let attempts = 0;
   const timer = setInterval(() => {
     attempts += 1;
     step();
 
-    if (finished || attempts > 180) {
+    if (finished || attempts > 240) {
       clearInterval(timer);
       observer.disconnect();
-
-      if (!finished) {
-        showToast("Não consegui concluir sozinho. Deixe a tela do Scale aberta e atualize o conector.");
-      }
+      if (!finished) showToast("A automação parou nesta etapa. Envie um print dessa tela para eu ajustar.");
     }
   }, 500);
 
