@@ -5,34 +5,6 @@ import { useRouter } from "next/navigation";
 import ThemeToggle from "../components/ThemeToggle";
 
 const COMMERCIAL_ACCESS_KEY = "commercial-supabase-access";
-const COMMERCIAL_ACCESS_SALT = "lc-supa-2026-7f4d2a9bc18e6d53";
-const COMMERCIAL_ACCESS_ITERATIONS = 310000;
-
-async function deriveCommercialAccess(username: string, password: string) {
-  const encoder = new TextEncoder();
-  const material = await crypto.subtle.importKey(
-    "raw",
-    encoder.encode(`${username}:${password}`),
-    "PBKDF2",
-    false,
-    ["deriveBits"]
-  );
-
-  const bits = await crypto.subtle.deriveBits(
-    {
-      name: "PBKDF2",
-      hash: "SHA-256",
-      salt: encoder.encode(COMMERCIAL_ACCESS_SALT),
-      iterations: COMMERCIAL_ACCESS_ITERATIONS
-    },
-    material,
-    256
-  );
-
-  return Array.from(new Uint8Array(bits))
-    .map((byte) => byte.toString(16).padStart(2, "0"))
-    .join("");
-}
 
 export default function LoginPage() {
   const router = useRouter();
@@ -54,8 +26,7 @@ export default function LoginPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Falha no login.");
 
-      const storageAccess = await deriveCommercialAccess(username.trim(), password);
-      sessionStorage.setItem(COMMERCIAL_ACCESS_KEY, storageAccess);
+      sessionStorage.setItem(COMMERCIAL_ACCESS_KEY, data.accessToken);
 
       router.push("/dashboard");
       router.refresh();
