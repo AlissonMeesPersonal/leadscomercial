@@ -1,5 +1,5 @@
 (() => {
-  const STORAGE_KEY = "lc_scale_automation_v3";
+  const STORAGE_KEY = "lc_scale_automation_v4";
   const params = new URLSearchParams(window.location.search);
 
   const digits = (value) => String(value || "").replace(/\D/g, "");
@@ -39,6 +39,7 @@
   let continueClicked = false;
   let lastActionAt = 0;
   let lastMessage = "";
+  let sidebarClicked = false;
 
   function visible(el) {
     if (!el || !(el instanceof Element)) return false;
@@ -60,6 +61,7 @@
             result.push(el.shadowRoot);
             queue.push(el.shadowRoot);
           }
+
           if (el instanceof HTMLIFrameElement) {
             try {
               if (el.contentDocument) {
@@ -101,7 +103,8 @@
         el?.getAttribute?.("title"),
         el?.getAttribute?.("placeholder"),
         el?.getAttribute?.("data-testid"),
-        el?.getAttribute?.("name")
+        el?.getAttribute?.("name"),
+        el?.getAttribute?.("href")
       ]
         .filter(Boolean)
         .join(" ")
@@ -128,7 +131,7 @@
     if (!target || !visible(target)) return false;
 
     const now = Date.now();
-    if (now - lastActionAt < 700) return false;
+    if (now - lastActionAt < 650) return false;
     lastActionAt = now;
 
     try {
@@ -136,7 +139,10 @@
     } catch {}
 
     try {
-      target.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true }));
+      target.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+    } catch {}
+
+    try {
       target.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
       target.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
       target.click();
@@ -183,21 +189,17 @@
     } catch {}
   }
 
-  function routeIsChatUnidades() {
-    return location.pathname.includes("/chat-unidades");
-  }
+  function ensureFunctionalRoute() {
+    if (!location.pathname.includes("/d/chat-unidades")) return false;
 
-  function goToCorrectRoute() {
-    if (routeIsChatUnidades()) return false;
-
-    const url = new URL("https://scale.26fit.com.br/d/chat-unidades");
+    const url = new URL("https://scale.26fit.com.br/d/at-unidades");
     url.searchParams.set("lc_auto", "1");
     url.searchParams.set("lc_nome", lead.nome);
     url.searchParams.set("lc_ddi", lead.ddi || "55");
     url.searchParams.set("lc_phone", lead.phone);
 
-    showToast("Abrindo o módulo correto: Chat Unidades…");
-    location.assign(url.toString());
+    showToast("Essa rota direta não carrega o Scale. Voltando para a tela funcional…");
+    location.replace(url.toString());
     return true;
   }
 
@@ -206,33 +208,113 @@
       '[role="dialog"] *, [aria-modal="true"] *, h1,h2,h3,strong,span,div',
       [["nova", "conversa"]]
     );
+
     return Boolean(title && (findNameInput() || findPhoneInput()));
   }
 
-  function findUnitPanel() {
-    return findText("h1,h2,h3,strong,span,div", [["chat", "por", "unidade"]]);
-  }
-
-  function unitNeedsSelection() {
-    return Boolean(
-      findText("h1,h2,h3,p,span,div", [
-        ["selecione", "uma", "unidade"],
-        ["selecionar", "uma", "unidade"]
-      ])
+  function chatMenuOption() {
+    return findText(
+      'button,a,[role=button],[role=menuitem],[tabindex],span,div',
+      [
+        ["chat", "unidades"],
+        ["chat", "por", "unidade"],
+        ["atendimento", "unidades"]
+      ]
     );
   }
 
+  function clickSidebarChatIcon() {
+    const direct = findText(
+      'button,a,[role=button],[tabindex]',
+      [["chat"], ["conversa"], ["mensagem"]]
+    );
+
+    if (direct) {
+      const r = direct.getBoundingClientRect();
+      if (r.left < 110 && r.top > 120) {
+        sidebarClicked = true;
+        return safeClick(direct, "Abrindo o menu de chats…");
+      }
+    }
+
+    const candidates = all('button,a,[role=button],[tabindex]').filter((el) => {
+      if (!visible(el)) return false;
+      const r = el.getBoundingClientRect();
+      return (
+        r.left >= 0 &&
+        r.left < 85 &&
+        r.top > 140 &&
+        r.top < 390 &&
+        r.width <= 90 &&
+        r.height <= 90
+      );
+    });
+
+    const ranked = candidates
+      .map((el) => {
+        const r = el.getBoundingClientRect();
+        const text = words(el);
+        let score = 0;
+
+        if (text.includes("chat") || text.includes("conversa") || text.includes("mensagem")) score += 30;
+        if (el.querySelector("svg")) score += 10;
+        if (el.querySelector("img")) score += 5;
+        if (r.top > 175 && r.top < 285) score += 12;
+        if (r.left < 70) score += 8;
+        if (r.width >= 24 && r.height >= 24) score += 4;
+
+        return { el, score };
+      })
+      .sort((a, b) => b.score - a.score);
+
+    if (ranked[0]?.score >= 10) {
+      sidebarClicked = true;
+      return safeClick(ranked[0].el, "Abrindo o menu de chats…");
+    }
+
+    const points = [
+      [31, 210],
+      [31, 245],
+      [31, 280]
+    ];
+
+    for (const [x, y] of points) {
+      const el = document.elementFromPoint(x, y);
+      const target = clickable(el);
+      if (target && visible(target)) {
+        sidebarClicked = true;
+        return safeClick(target, "Abrindo o menu de chats…");
+      }
+    }
+
+    return false;
+  }
+
+  function enterChatUnidades() {
+    const option = chatMenuOption();
+    if (option) return safeClick(option, "Entrando em Chat Unidades…");
+    return false;
+  }
+
+  function findUnitPanel() {
+    return findText("h1,h2,h3,strong,span,div", [
+      ["chat", "por", "unidade"],
+      ["unidades"],
+      ["selecione", "unidade"]
+    ]);
+  }
+
   function clickSantaCruzUnit() {
-    const candidates = all("button,a,[role=button],[tabindex],div").filter((el) => {
+    const candidates = all("button,a,[role=button],[tabindex],div,span").filter((el) => {
       if (!visible(el)) return false;
       const text = words(el);
       if (!text.includes("santa cruz")) return false;
 
-      const rect = el.getBoundingClientRect();
-      const leftSide = rect.left < window.innerWidth * 0.48;
-      const belowHeader = rect.top > 160;
-      const notTopAccount = rect.top > 110;
-      return leftSide && belowHeader && notTopAccount;
+      const r = el.getBoundingClientRect();
+
+      if (r.top < 130 && r.left > window.innerWidth * 0.65) return false;
+
+      return r.top > 120;
     });
 
     candidates.sort((a, b) => {
@@ -240,14 +322,14 @@
       const br = b.getBoundingClientRect();
 
       const aScore =
-        (a.matches("button,a,[role=button],[tabindex]") ? 10 : 0) +
-        (ar.left < 600 ? 5 : 0) +
-        (ar.width > 120 ? 2 : 0);
+        (a.matches("button,a,[role=button],[tabindex]") ? 20 : 0) +
+        (ar.left < window.innerWidth * 0.65 ? 8 : 0) +
+        (ar.top > 170 ? 5 : 0);
 
       const bScore =
-        (b.matches("button,a,[role=button],[tabindex]") ? 10 : 0) +
-        (br.left < 600 ? 5 : 0) +
-        (br.width > 120 ? 2 : 0);
+        (b.matches("button,a,[role=button],[tabindex]") ? 20 : 0) +
+        (br.left < window.innerWidth * 0.65 ? 8 : 0) +
+        (br.top > 170 ? 5 : 0);
 
       return bScore - aScore;
     });
@@ -259,31 +341,20 @@
     return false;
   }
 
-  function newConversationVisible() {
-    return findText('button,a,[role=button]', [["nova", "conversa"]]);
+  function newConversationButton() {
+    return findText(
+      'button,a,[role=button],[tabindex]',
+      [
+        ["nova", "conversa"],
+        ["novo", "contato"],
+        ["iniciar", "conversa"]
+      ]
+    );
   }
 
   function clickNewConversation() {
-    const button = newConversationVisible();
+    const button = newConversationButton();
     if (button) return safeClick(button, "Abrindo Nova Conversa…");
-    return false;
-  }
-
-  function clickChatUnidadesFallback() {
-    const item = findText(
-      'button,a,[role=button],[role=menuitem],span,div',
-      [["chat", "unidades"], ["chat", "por", "unidade"]]
-    );
-
-    if (item) return safeClick(item, "Entrando em Chat Unidades…");
-
-    const chats = findText(
-      'button,a,[role=button],[role=menuitem],span,div',
-      [["chats"]]
-    );
-
-    if (chats) return safeClick(chats, "Abrindo o menu Chats…");
-
     return false;
   }
 
@@ -300,8 +371,12 @@
 
         const id = label.getAttribute("for");
         if (id) {
-          const input = document.getElementById(id);
-          if (input instanceof HTMLInputElement && visible(input)) return input;
+          for (const root of roots()) {
+            try {
+              const input = root.getElementById?.(id);
+              if (input instanceof HTMLInputElement && visible(input)) return input;
+            } catch {}
+          }
         }
       }
 
@@ -310,7 +385,7 @@
         .filter((input) => {
           if (!visible(input)) return false;
           const r = input.getBoundingClientRect();
-          return r.top >= lr.top - 10 && r.top <= lr.bottom + 115 && r.left >= lr.left - 30;
+          return r.top >= lr.top - 10 && r.top <= lr.bottom + 120 && r.left >= lr.left - 40;
         })
         .sort((a, b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top);
 
@@ -375,8 +450,10 @@
     if (!label) return false;
 
     let parent = label.parentElement;
+
     for (let i = 0; parent && i < 4; i += 1, parent = parent.parentElement) {
       const control = [...parent.querySelectorAll('button,[role=combobox],[role=button]')].find(visible);
+
       if (control) {
         if (!safeClick(control, "Selecionando Brasil +55…")) return false;
 
@@ -385,6 +462,7 @@
             '[role=option],[role=menuitem],button,li,div',
             [["brasil", "+55"], ["brasil"], ["brazil", "+55"]]
           );
+
           if (brazil) safeClick(brazil, "Brasil +55 selecionado.");
         }, 300);
 
@@ -423,6 +501,7 @@
     if (!continueClicked) {
       continueClicked = true;
       showToast("Dados preenchidos. Clicando em Continuar…");
+
       setTimeout(() => {
         safeClick(next, "Avançando para a próxima etapa…");
         finished = true;
@@ -437,44 +516,61 @@
   function step() {
     if (finished) return;
 
-    if (!routeIsChatUnidades()) {
-      goToCorrectRoute();
-      return;
-    }
+    if (ensureFunctionalRoute()) return;
 
     if (modalOpen()) {
       fillModal();
       return;
     }
 
-    if (newConversationVisible()) {
+    if (newConversationButton()) {
       clickNewConversation();
       return;
     }
 
-    if (findUnitPanel() && unitNeedsSelection()) {
-      if (!clickSantaCruzUnit()) {
-        showToast("Chat por Unidade aberto. Aguardando a unidade Santa Cruz aparecer…");
-      }
-      return;
-    }
-
     if (findUnitPanel()) {
-      showToast("Unidade carregando. Aguardando o botão Nova Conversa…");
+      if (clickSantaCruzUnit()) return;
+    }
+
+    if (chatMenuOption()) {
+      enterChatUnidades();
       return;
     }
 
-    if (!clickChatUnidadesFallback()) {
-      showToast("Aguardando o menu Chat Unidades carregar…");
+    if (!sidebarClicked) {
+      if (clickSidebarChatIcon()) return;
+    } else {
+      const option = chatMenuOption();
+      if (option) {
+        enterChatUnidades();
+        return;
+      }
+
+      const unit = findUnitPanel();
+      if (unit) {
+        clickSantaCruzUnit();
+        return;
+      }
+
+      showToast("Menu de chats aberto. Aguardando a opção Chat Unidades…");
+      return;
     }
+
+    showToast("Aguardando o painel do Scale carregar…");
   }
 
-  showToast("Automação iniciada. Abrindo Chat Unidades…");
+  showToast("Automação iniciada. Abrindo o menu de chats…");
 
   const observer = new MutationObserver(() => step());
-  observer.observe(document.documentElement, { childList: true, subtree: true });
+  observer.observe(document.documentElement, {
+    childList: true,
+    subtree: true,
+    attributes: true,
+    attributeFilter: ["class", "aria-expanded", "aria-selected"]
+  });
 
   let attempts = 0;
+
   const timer = setInterval(() => {
     attempts += 1;
     step();
@@ -482,7 +578,10 @@
     if (finished || attempts > 240) {
       clearInterval(timer);
       observer.disconnect();
-      if (!finished) showToast("A automação parou nesta etapa. Envie um print dessa tela para eu ajustar.");
+
+      if (!finished) {
+        showToast("A automação parou nesta etapa. Envie um print dessa tela para eu ajustar.");
+      }
     }
   }, 500);
 
