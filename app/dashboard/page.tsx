@@ -18,6 +18,16 @@ type Lead = {
 
 const statusList: Status[] = ["Novo", "Em contato", "Interessado", "Sem retorno", "Convertido"];
 
+const TEST_LEAD: Lead = {
+  id: "teste-aisson-mees",
+  nome: "Aisson Mees",
+  whatsapp: "51999303642",
+  email: "",
+  origem: "Teste Scale",
+  status: "Novo",
+  criadoEm: new Date().toISOString()
+};
+
 function onlyDigits(value: string) {
   return value.replace(/\D/g, "");
 }
@@ -89,7 +99,14 @@ export default function DashboardPage() {
   useEffect(() => {
     const saved = localStorage.getItem("leads-comercial");
     if (saved) {
-      try { setLeads(JSON.parse(saved)); } catch {}
+      try {
+        const parsed = JSON.parse(saved);
+        setLeads(Array.isArray(parsed) && parsed.length ? parsed : [TEST_LEAD]);
+      } catch {
+        setLeads([TEST_LEAD]);
+      }
+    } else {
+      setLeads([TEST_LEAD]);
     }
     setLoaded(true);
   }, []);
@@ -184,6 +201,27 @@ export default function DashboardPage() {
     setLeads((current) => current.filter((lead) => lead.id !== id));
   }
 
+  async function startScale(lead: Lead) {
+    const full = normalizeWhatsApp(lead.whatsapp);
+    const phone = full.startsWith("55") ? full.slice(2) : full;
+    const params = new URLSearchParams({
+      lc_auto: "1",
+      lc_nome: lead.nome,
+      lc_ddi: "55",
+      lc_phone: phone
+    });
+
+    const payload = `Nome: ${lead.nome}\nDDI: +55\nTelefone: ${phone}`;
+
+    try {
+      await navigator.clipboard.writeText(payload);
+    } catch {}
+
+    updateStatus(lead.id, "Em contato");
+    setNotice(`Abrindo o Scale para ${lead.nome}. Os dados também foram copiados.`);
+    window.open(`https://scale.26fit.com.br/d/at-unidades?${params.toString()}`, "_blank", "noopener,noreferrer");
+  }
+
   async function logout() {
     await fetch("/api/logout", { method: "POST" });
     location.href = "/login";
@@ -256,6 +294,7 @@ export default function DashboardPage() {
                     </td>
                     <td>
                       <div className="row-actions">
+                        {wa && <button className="scale-btn" onClick={() => startScale(lead)}>Iniciar no Scale</button>}
                         {wa && <a className="wa-btn" href={`https://wa.me/${wa}?text=${text}`} target="_blank" rel="noreferrer">WhatsApp</a>}
                         {lead.email && <a className="mail-btn" href={`mailto:${lead.email}`}>E-mail</a>}
                         <button className="delete-btn" onClick={() => removeLead(lead.id)}>Excluir</button>
