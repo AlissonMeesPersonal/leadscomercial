@@ -79,6 +79,7 @@ function textToLeads(text: string, origem: string): Lead[] {
 export default function DashboardPage() {
   const inputRef = useRef<HTMLInputElement>(null);
   const [leads, setLeads] = useState<Lead[]>([]);
+  const [loaded, setLoaded] = useState(false);
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("Todos");
   const [notice, setNotice] = useState("");
@@ -89,11 +90,12 @@ export default function DashboardPage() {
     if (saved) {
       try { setLeads(JSON.parse(saved)); } catch {}
     }
+    setLoaded(true);
   }, []);
 
   useEffect(() => {
-    localStorage.setItem("leads-comercial", JSON.stringify(leads));
-  }, [leads]);
+    if (loaded) localStorage.setItem("leads-comercial", JSON.stringify(leads));
+  }, [leads, loaded]);
 
   const filtered = useMemo(() => {
     const q = query.toLowerCase();
@@ -130,13 +132,17 @@ export default function DashboardPage() {
       const ext = file.name.split(".").pop()?.toLowerCase();
       let imported: Lead[] = [];
 
-      if (["xlsx", "xls", "csv"].includes(ext || "")) {
+      if (["xlsx", "xls", "xlsm", "xlsb", "ods", "csv", "tsv"].includes(ext || "")) {
         const data = await file.arrayBuffer();
         const wb = XLSX.read(data);
         for (const sheetName of wb.SheetNames) {
           const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(wb.Sheets[sheetName], { defval: "" });
           imported.push(...rowsToLeads(rows, `${file.name} • ${sheetName}`));
         }
+      } else if (ext === "json") {
+        const parsed = JSON.parse(await file.text());
+        const rows = Array.isArray(parsed) ? parsed : Array.isArray(parsed?.leads) ? parsed.leads : [parsed];
+        imported = rowsToLeads(rows, file.name);
       } else if (ext === "docx") {
         const result = await mammoth.extractRawText({ arrayBuffer: await file.arrayBuffer() });
         imported = textToLeads(result.value, file.name);
@@ -148,13 +154,16 @@ export default function DashboardPage() {
         for (let page = 1; page <= pdf.numPages; page++) {
           const p = await pdf.getPage(page);
           const content = await p.getTextContent();
-          text += "\n" + content.items.map((item: any) => item.str || "").join(" ");
+          for (const item of content.items as any[]) {
+            text += (item.str || "") + (item.hasEOL ? "\n" : " ");
+          }
+          text += "\n";
         }
         imported = textToLeads(text, file.name);
-      } else if (["txt", "tsv"].includes(ext || "")) {
+      } else if (ext === "txt") {
         imported = textToLeads(await file.text(), file.name);
       } else {
-        throw new Error("Formato ainda não suportado. Use XLSX, XLS, CSV, PDF, DOCX, TXT ou TSV.");
+        throw new Error("Formato ainda não suportado. Use planilhas, CSV/TSV, PDF, DOCX, TXT ou JSON.");
       }
 
       addImported(imported);
@@ -189,7 +198,7 @@ export default function DashboardPage() {
           <h1>Leads Comercial</h1>
         </div>
         <div className="topbar-actions">
-          <input ref={inputRef} type="file" accept=".xlsx,.xls,.csv,.pdf,.docx,.txt,.tsv" onChange={handleFile} hidden />
+          <input ref={inputRef} type="file" accept=".xlsx,.xls,.xlsm,.xlsb,.ods,.csv,.tsv,.pdf,.docx,.txt,.json" onChange={handleFile} hidden />
           <button className="primary-btn small" onClick={() => inputRef.current?.click()} disabled={processing}>
             {processing ? "Importando..." : "+ Importar leads"}
           </button>
@@ -207,7 +216,7 @@ export default function DashboardPage() {
       <section className="import-box">
         <div>
           <strong>Importe sua base de contatos</strong>
-          <p>XLSX, XLS, CSV, PDF, DOCX, TXT e TSV. O sistema identifica nome, WhatsApp e e-mail quando presentes.</p>
+          <p>Planilhas, CSV/TSV, PDF, DOCX, TXT e JSON. O sistema identifica nome, WhatsApp e e-mail quando presentes.</p>
         </div>
         <button className="secondary-btn" onClick={() => inputRef.current?.click()} disabled={processing}>Selecionar arquivo</button>
       </section>
