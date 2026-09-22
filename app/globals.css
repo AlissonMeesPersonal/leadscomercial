@@ -333,7 +333,77 @@ html[data-theme="light"] .import-box {
 }
 
 .filters.filters-demand {
-  grid-template-columns: minmax(230px, 1fr) repeat(4, minmax(150px, 190px));
+  grid-template-columns: minmax(260px, 1fr) repeat(3, minmax(160px, 210px));
+}
+
+.demand-tabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin: 4px 0 18px;
+}
+
+.demand-tab {
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--card);
+  color: var(--text);
+  padding: 16px 18px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  text-align: left;
+  font-weight: 900;
+}
+
+.demand-tab span {
+  font-size: 15px;
+}
+
+.demand-tab strong {
+  min-width: 42px;
+  height: 34px;
+  padding: 0 10px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-soft);
+  color: var(--muted);
+}
+
+.demand-tab:hover {
+  transform: translateY(-1px);
+}
+
+.demand-tab.opportunity.active {
+  border-color: rgba(75, 126, 255, .55);
+  background: var(--blue-soft);
+}
+
+.demand-tab.opportunity.active strong {
+  background: rgba(75, 126, 255, .18);
+  color: #7198ff;
+}
+
+html[data-theme="light"] .demand-tab.opportunity.active strong {
+  color: #315ca8;
+}
+
+.demand-tab.delinquent.active {
+  border-color: rgba(232, 78, 78, .48);
+  background: var(--danger-soft);
+}
+
+.demand-tab.delinquent.active strong {
+  background: rgba(232, 78, 78, .14);
+  color: var(--danger);
+}
+
+.import-box.delinquent-box {
+  border-color: rgba(232, 78, 78, .3);
 }
 
 .import-actions {
@@ -673,6 +743,9 @@ html[data-theme="light"] .mail-btn {
   .filters {
     grid-template-columns: 1fr;
   }
+  .demand-tabs {
+    grid-template-columns: 1fr 1fr;
+  }
   .admin-grid {
     grid-template-columns: 1fr;
   }
@@ -690,6 +763,9 @@ html[data-theme="light"] .mail-btn {
   .metrics {
     grid-template-columns: 1fr 1fr;
     gap: 10px;
+  }
+  .demand-tabs {
+    grid-template-columns: 1fr;
   }
   .metrics article {
     padding: 15px;
