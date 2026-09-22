@@ -221,19 +221,107 @@
       } catch {}
 
       try {
+        // Um único clique real. A versão anterior disparava "click" duas vezes
+        // (dispatchEvent + .click()), o que podia selecionar e desfazer a ação.
+        target.dispatchEvent(
+          new PointerEvent("pointerdown", {
+            bubbles: true,
+            cancelable: true,
+            pointerType: "mouse"
+          })
+        );
         target.dispatchEvent(
           new MouseEvent("mousedown", { bubbles: true, cancelable: true })
         );
         target.dispatchEvent(
           new MouseEvent("mouseup", { bubbles: true, cancelable: true })
         );
-        target.dispatchEvent(
-          new MouseEvent("click", { bubbles: true, cancelable: true })
-        );
 
-        if (typeof target.click === "function") target.click();
+        if (typeof target.click === "function") {
+          target.click();
+        } else {
+          target.dispatchEvent(
+            new MouseEvent("click", { bubbles: true, cancelable: true })
+          );
+        }
 
         if (message) showToast(message);
+        return true;
+      } catch {
+        return false;
+      }
+    }
+
+    function bestActionAncestor(el) {
+      if (!el) return null;
+
+      const candidates = [];
+      let node = el;
+
+      for (let depth = 0; node && depth < 8; depth += 1, node = node.parentElement) {
+        if (!visible(node)) continue;
+
+        const r = node.getBoundingClientRect();
+        if (r.width < 40 || r.height < 24) continue;
+
+        let score = 0;
+        const role = norm(node.getAttribute?.("role"));
+        const cls = norm(node.getAttribute?.("class"));
+        const testid = norm(node.getAttribute?.("data-testid"));
+
+        if (node.matches?.("button,a,[role=button],[role=menuitem],[tabindex]")) score += 40;
+        if (typeof node.onclick === "function") score += 35;
+        if (role.includes("button") || role.includes("menuitem") || role.includes("option")) score += 30;
+        if (testid.includes("unit") || testid.includes("unidade")) score += 20;
+        if (cls.includes("cursor-pointer") || cls.includes("clickable")) score += 18;
+
+        try {
+          if (getComputedStyle(node).cursor === "pointer") score += 25;
+        } catch {}
+
+        // A linha/cartão costuma ser maior que o texto, mas evitamos containers gigantes.
+        if (r.width >= 120 && r.width <= 900) score += 12;
+        if (r.height >= 36 && r.height <= 140) score += 12;
+        if (depth > 0 && depth <= 4) score += 8;
+
+        candidates.push({ el: node, score, depth, area: r.width * r.height });
+      }
+
+      candidates.sort((a, b) => b.score - a.score || a.depth - b.depth || a.area - b.area);
+      return candidates[0]?.el || el;
+    }
+
+    function coordinateClick(el) {
+      if (!el || !visible(el)) return false;
+
+      try {
+        el.scrollIntoView({ block: "center", inline: "center" });
+        const r = el.getBoundingClientRect();
+        const x = Math.max(1, Math.min(window.innerWidth - 1, r.left + r.width / 2));
+        const y = Math.max(1, Math.min(window.innerHeight - 1, r.top + r.height / 2));
+        const hit = document.elementFromPoint(x, y);
+
+        if (!hit) return false;
+
+        const target = bestActionAncestor(hit);
+        if (!target) return false;
+
+        target.dispatchEvent(
+          new PointerEvent("pointerdown", {
+            bubbles: true,
+            cancelable: true,
+            clientX: x,
+            clientY: y,
+            pointerType: "mouse"
+          })
+        );
+        target.dispatchEvent(
+          new MouseEvent("mousedown", { bubbles: true, cancelable: true, clientX: x, clientY: y })
+        );
+        target.dispatchEvent(
+          new MouseEvent("mouseup", { bubbles: true, cancelable: true, clientX: x, clientY: y })
+        );
+        target.click?.();
         return true;
       } catch {
         return false;
@@ -380,7 +468,8 @@
         })
         .sort((a, b) => b.score - a.score || a.area - b.area);
 
-      return matches[0]?.el || null;
+      const found = matches[0]?.el || null;
+      return found ? bestActionAncestor(found) : null;
     }
 
     function santaCruzChatLoaded() {
@@ -696,11 +785,24 @@
           ) {
             santaCruzClickedAt = Date.now();
 
-            safeClick(
+            const clicked = safeClick(
               row,
               "Selecionando a unidade Santa Cruz…",
               350
             );
+
+            // Fallback para interfaces em que o clique fica preso no texto
+            // e o handler está no cartão/linha que está por baixo.
+            if (!clicked) {
+              coordinateClick(row);
+            }
+
+            setTimeout(() => {
+              if (!santaCruzChatLoaded() && unitPanelVisible()) {
+                coordinateClick(row);
+                showToast("Reforçando a seleção da unidade Santa Cruz…");
+              }
+            }, 900);
           } else {
             showToast(
               "Santa Cruz selecionada. Aguardando o chat carregar…"
