@@ -4,7 +4,7 @@ const secret = new TextEncoder().encode(
   process.env.SESSION_SECRET || "dev-only-change-this-secret"
 );
 
-export type CommercialRole = "admin" | "user";
+export type CommercialRole = "admin" | "commercial" | "user";
 
 export type CommercialSession = {
   username: string;
@@ -35,7 +35,7 @@ export async function getSession(token?: string): Promise<CommercialSession | nu
       !data.displayName ||
       !data.role ||
       !data.userId ||
-      (data.role !== "admin" && data.role !== "user")
+      (data.role !== "admin" && data.role !== "commercial" && data.role !== "user")
     ) {
       return null;
     }
