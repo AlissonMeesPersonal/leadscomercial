@@ -3,6 +3,7 @@
 import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
 import * as XLSX from "xlsx";
 import mammoth from "mammoth";
+import ThemeToggle from "../components/ThemeToggle";
 
 type Status = "Novo" | "Em contato" | "Interessado" | "Sem retorno" | "Convertido";
 type Lead = {
@@ -198,6 +199,7 @@ export default function DashboardPage() {
           <h1>Leads Comercial</h1>
         </div>
         <div className="topbar-actions">
+          <ThemeToggle />
           <input ref={inputRef} type="file" accept=".xlsx,.xls,.xlsm,.xlsb,.ods,.csv,.tsv,.pdf,.docx,.txt,.json" onChange={handleFile} hidden />
           <button className="primary-btn small" onClick={() => inputRef.current?.click()} disabled={processing}>
             {processing ? "Importando..." : "+ Importar leads"}
