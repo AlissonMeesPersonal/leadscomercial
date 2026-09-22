@@ -1,9 +1,9 @@
 (() => {
-  const STORAGE_KEY = "lc_scale_automation_v4";
+  const STORAGE_KEY = "lc_scale_automation_v5";
   const params = new URLSearchParams(window.location.search);
 
   const digits = (value) => String(value || "").replace(/\D/g, "");
-  const normalizeText = (value) =>
+  const norm = (value) =>
     String(value || "")
       .normalize("NFD")
       .replace(/[\u0300-\u036f]/g, "")
@@ -35,18 +35,25 @@
   if (!saved?.lead?.phone) return;
 
   const lead = saved.lead;
+
   let finished = false;
   let continueClicked = false;
   let lastActionAt = 0;
   let lastMessage = "";
-  let sidebarClicked = false;
+  let menuClickedAt = 0;
+  let unitClickedAt = 0;
+  let sidebarOpenedAt = 0;
 
   function visible(el) {
     if (!el || !(el instanceof Element)) return false;
     const style = getComputedStyle(el);
-    if (style.display === "none" || style.visibility === "hidden" || Number(style.opacity) === 0) return false;
-    const rect = el.getBoundingClientRect();
-    return rect.width > 2 && rect.height > 2;
+    if (
+      style.display === "none" ||
+      style.visibility === "hidden" ||
+      Number(style.opacity) === 0
+    ) return false;
+    const r = el.getBoundingClientRect();
+    return r.width > 2 && r.height > 2;
   }
 
   function roots() {
@@ -55,8 +62,9 @@
 
     while (queue.length) {
       const root = queue.shift();
+
       try {
-        for (const el of root.querySelectorAll("*")) {
+        root.querySelectorAll("*").forEach((el) => {
           if (el.shadowRoot) {
             result.push(el.shadowRoot);
             queue.push(el.shadowRoot);
@@ -70,7 +78,7 @@
               }
             } catch {}
           }
-        }
+        });
       } catch {}
     }
 
@@ -78,7 +86,7 @@
   }
 
   function all(selector) {
-    const output = [];
+    const result = [];
     const seen = new Set();
 
     for (const root of roots()) {
@@ -86,17 +94,17 @@
         root.querySelectorAll(selector).forEach((el) => {
           if (!seen.has(el)) {
             seen.add(el);
-            output.push(el);
+            result.push(el);
           }
         });
       } catch {}
     }
 
-    return output;
+    return result;
   }
 
-  function words(el) {
-    return normalizeText(
+  function textOf(el) {
+    return norm(
       [
         el?.textContent,
         el?.getAttribute?.("aria-label"),
@@ -105,34 +113,59 @@
         el?.getAttribute?.("data-testid"),
         el?.getAttribute?.("name"),
         el?.getAttribute?.("href")
-      ]
-        .filter(Boolean)
-        .join(" ")
+      ].filter(Boolean).join(" ")
     );
   }
 
-  function findText(selector, groups) {
+  function findContains(selector, groups) {
     return (
       all(selector).find((el) => {
         if (!visible(el)) return false;
-        const text = words(el);
-        return groups.some((group) => group.every((word) => text.includes(normalizeText(word))));
+        const text = textOf(el);
+        return groups.some((group) =>
+          group.every((part) => text.includes(norm(part)))
+        );
       }) || null
     );
   }
 
-  function clickable(el) {
-    if (!el) return null;
-    return el.closest("button,a,[role=button],[role=menuitem],[tabindex]") || el;
+  function findExactVisibleText(text, selector = "span,div,p,strong,a,button,[role=button],[role=menuitem]") {
+    const wanted = norm(text);
+
+    const matches = all(selector)
+      .filter((el) => {
+        if (!visible(el)) return false;
+        const own = norm(el.textContent);
+        return own === wanted || own.startsWith(wanted);
+      })
+      .map((el) => {
+        const r = el.getBoundingClientRect();
+        return { el, area: r.width * r.height };
+      })
+      .sort((a, b) => a.area - b.area);
+
+    return matches[0]?.el || null;
   }
 
-  function safeClick(el, message) {
+  function clickable(el) {
+    if (!el) return null;
+
+    const direct = el.closest("button,a,[role=button],[role=menuitem],[tabindex]");
+    if (direct) return direct;
+
+    let parent = el;
+    for (let i = 0; parent && i < 5; i += 1, parent = parent.parentElement) {
+      if (!visible(parent)) continue;
+      const style = getComputedStyle(parent);
+      if (style.cursor === "pointer") return parent;
+    }
+
+    return el;
+  }
+
+  function fireClick(el) {
     const target = clickable(el);
     if (!target || !visible(target)) return false;
-
-    const now = Date.now();
-    if (now - lastActionAt < 650) return false;
-    lastActionAt = now;
 
     try {
       target.scrollIntoView({ block: "center", inline: "center" });
@@ -145,12 +178,23 @@
     try {
       target.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
       target.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
-      target.click();
-      if (message) showToast(message);
+      target.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      if (typeof target.click === "function") target.click();
       return true;
     } catch {
       return false;
     }
+  }
+
+  function safeClick(el, message, minGap = 650) {
+    const now = Date.now();
+    if (now - lastActionAt < minGap) return false;
+
+    if (!fireClick(el)) return false;
+
+    lastActionAt = now;
+    if (message) showToast(message);
+    return true;
   }
 
   function showToast(message) {
@@ -158,9 +202,11 @@
     lastMessage = message;
 
     let toast = document.getElementById("lc-scale-toast");
+
     if (!toast) {
       toast = document.createElement("div");
       toast.id = "lc-scale-toast";
+
       Object.assign(toast.style, {
         position: "fixed",
         right: "18px",
@@ -173,8 +219,9 @@
         border: "1px solid rgba(255,255,255,.18)",
         boxShadow: "0 12px 30px rgba(0,0,0,.28)",
         font: "600 13px Arial, sans-serif",
-        maxWidth: "390px"
+        maxWidth: "420px"
       });
+
       document.documentElement.appendChild(toast);
     }
 
@@ -184,12 +231,14 @@
   function cleanParams() {
     try {
       const url = new URL(location.href);
-      ["lc_auto", "lc_nome", "lc_ddi", "lc_phone"].forEach((key) => url.searchParams.delete(key));
+      ["lc_auto", "lc_nome", "lc_ddi", "lc_phone"].forEach((key) =>
+        url.searchParams.delete(key)
+      );
       history.replaceState(history.state, "", url.toString());
     } catch {}
   }
 
-  function ensureFunctionalRoute() {
+  function recoverBadDirectRoute() {
     if (!location.pathname.includes("/d/chat-unidades")) return false;
 
     const url = new URL("https://scale.26fit.com.br/d/at-unidades");
@@ -198,172 +247,180 @@
     url.searchParams.set("lc_ddi", lead.ddi || "55");
     url.searchParams.set("lc_phone", lead.phone);
 
-    showToast("Essa rota direta não carrega o Scale. Voltando para a tela funcional…");
+    showToast("Voltando para a tela funcional do Scale…");
     location.replace(url.toString());
     return true;
   }
 
-  function modalOpen() {
-    const title = findText(
-      '[role="dialog"] *, [aria-modal="true"] *, h1,h2,h3,strong,span,div',
-      [["nova", "conversa"]]
-    );
+  function sidebarChatOption() {
+    const exact =
+      findExactVisibleText("Chat Unidades") ||
+      findExactVisibleText("Chat por Unidade");
 
-    return Boolean(title && (findNameInput() || findPhoneInput()));
+    if (exact) {
+      const r = exact.getBoundingClientRect();
+      if (r.left < 300) return exact;
+    }
+
+    return null;
   }
 
-  function chatMenuOption() {
-    return findText(
-      'button,a,[role=button],[role=menuitem],[tabindex],span,div',
-      [
-        ["chat", "unidades"],
-        ["chat", "por", "unidade"],
-        ["atendimento", "unidades"]
-      ]
-    );
+  function sidebarIsExpanded() {
+    return Boolean(sidebarChatOption());
   }
 
-  function clickSidebarChatIcon() {
-    const direct = findText(
+  function clickSidebarIcon() {
+    const semantic = findContains(
       'button,a,[role=button],[tabindex]',
-      [["chat"], ["conversa"], ["mensagem"]]
+      [["chat"], ["mensagem"], ["conversa"]]
     );
 
-    if (direct) {
-      const r = direct.getBoundingClientRect();
-      if (r.left < 110 && r.top > 120) {
-        sidebarClicked = true;
-        return safeClick(direct, "Abrindo o menu de chats…");
+    if (semantic) {
+      const r = semantic.getBoundingClientRect();
+      if (r.left < 100 && r.top > 120 && r.top < 350) {
+        sidebarOpenedAt = Date.now();
+        return safeClick(semantic, "Abrindo o menu de chats…");
       }
     }
 
-    const candidates = all('button,a,[role=button],[tabindex]').filter((el) => {
-      if (!visible(el)) return false;
-      const r = el.getBoundingClientRect();
-      return (
-        r.left >= 0 &&
-        r.left < 85 &&
-        r.top > 140 &&
-        r.top < 390 &&
-        r.width <= 90 &&
-        r.height <= 90
-      );
-    });
+    const candidates = all('button,a,[role=button],[tabindex]')
+      .filter((el) => {
+        if (!visible(el)) return false;
+        const r = el.getBoundingClientRect();
 
-    const ranked = candidates
+        return (
+          r.left < 80 &&
+          r.top > 150 &&
+          r.top < 320 &&
+          r.width <= 90 &&
+          r.height <= 90
+        );
+      })
       .map((el) => {
         const r = el.getBoundingClientRect();
-        const text = words(el);
         let score = 0;
 
-        if (text.includes("chat") || text.includes("conversa") || text.includes("mensagem")) score += 30;
         if (el.querySelector("svg")) score += 10;
-        if (el.querySelector("img")) score += 5;
-        if (r.top > 175 && r.top < 285) score += 12;
-        if (r.left < 70) score += 8;
-        if (r.width >= 24 && r.height >= 24) score += 4;
+        if (r.top > 175 && r.top < 260) score += 15;
+        if (r.left < 60) score += 8;
 
         return { el, score };
       })
       .sort((a, b) => b.score - a.score);
 
-    if (ranked[0]?.score >= 10) {
-      sidebarClicked = true;
-      return safeClick(ranked[0].el, "Abrindo o menu de chats…");
-    }
-
-    const points = [
-      [31, 210],
-      [31, 245],
-      [31, 280]
-    ];
-
-    for (const [x, y] of points) {
-      const el = document.elementFromPoint(x, y);
-      const target = clickable(el);
-      if (target && visible(target)) {
-        sidebarClicked = true;
-        return safeClick(target, "Abrindo o menu de chats…");
-      }
-    }
-
-    return false;
-  }
-
-  function enterChatUnidades() {
-    const option = chatMenuOption();
-    if (option) return safeClick(option, "Entrando em Chat Unidades…");
-    return false;
-  }
-
-  function findUnitPanel() {
-    return findText("h1,h2,h3,strong,span,div", [
-      ["chat", "por", "unidade"],
-      ["unidades"],
-      ["selecione", "unidade"]
-    ]);
-  }
-
-  function clickSantaCruzUnit() {
-    const candidates = all("button,a,[role=button],[tabindex],div,span").filter((el) => {
-      if (!visible(el)) return false;
-      const text = words(el);
-      if (!text.includes("santa cruz")) return false;
-
-      const r = el.getBoundingClientRect();
-
-      if (r.top < 130 && r.left > window.innerWidth * 0.65) return false;
-
-      return r.top > 120;
-    });
-
-    candidates.sort((a, b) => {
-      const ar = a.getBoundingClientRect();
-      const br = b.getBoundingClientRect();
-
-      const aScore =
-        (a.matches("button,a,[role=button],[tabindex]") ? 20 : 0) +
-        (ar.left < window.innerWidth * 0.65 ? 8 : 0) +
-        (ar.top > 170 ? 5 : 0);
-
-      const bScore =
-        (b.matches("button,a,[role=button],[tabindex]") ? 20 : 0) +
-        (br.left < window.innerWidth * 0.65 ? 8 : 0) +
-        (br.top > 170 ? 5 : 0);
-
-      return bScore - aScore;
-    });
-
     if (candidates[0]) {
-      return safeClick(candidates[0], "Selecionando a unidade Santa Cruz…");
+      sidebarOpenedAt = Date.now();
+      return safeClick(candidates[0].el, "Abrindo o menu de chats…");
+    }
+
+    const el = document.elementFromPoint(25, 210);
+    if (el) {
+      sidebarOpenedAt = Date.now();
+      return safeClick(el, "Abrindo o menu de chats…");
     }
 
     return false;
+  }
+
+  function clickChatUnidadesMenu() {
+    const option = sidebarChatOption();
+    if (!option) return false;
+
+    menuClickedAt = Date.now();
+
+    return safeClick(
+      option,
+      "Chat Unidades selecionado. Aguardando a lista de unidades…",
+      400
+    );
+  }
+
+  function unitPanelVisible() {
+    return Boolean(
+      findContains("h1,h2,h3,strong,span,div", [
+        ["chat", "por", "unidade"],
+        ["selecione", "uma", "unidade"],
+        ["selecione", "unidade"]
+      ])
+    );
+  }
+
+  function santaCruzUnitRow() {
+    const exact = all("span,div,p,strong,a,button,[role=button],[tabindex]")
+      .filter((el) => {
+        if (!visible(el)) return false;
+
+        const txt = norm(el.textContent);
+        if (txt !== "santa cruz" && !txt.startsWith("santa cruz")) return false;
+
+        const r = el.getBoundingClientRect();
+
+        // Ignora o seletor da conta no canto superior direito.
+        if (r.top < 140 && r.left > window.innerWidth * 0.55) return false;
+
+        // A unidade da lista fica no painel esquerdo e abaixo do cabeçalho.
+        if (r.top < 150) return false;
+        if (r.left > window.innerWidth * 0.5) return false;
+
+        return true;
+      })
+      .map((el) => {
+        const r = el.getBoundingClientRect();
+        return { el, area: r.width * r.height };
+      })
+      .sort((a, b) => a.area - b.area);
+
+    return exact[0]?.el || null;
+  }
+
+  function clickSantaCruz() {
+    const row = santaCruzUnitRow();
+    if (!row) return false;
+
+    unitClickedAt = Date.now();
+
+    return safeClick(
+      row,
+      "Selecionando a unidade Santa Cruz…",
+      400
+    );
+  }
+
+  function santaCruzChatLoaded() {
+    return Boolean(
+      findContains("h1,h2,h3,strong,span,div", [
+        ["chat", "santa", "cruz"]
+      ])
+    );
   }
 
   function newConversationButton() {
-    return findText(
+    const exact =
+      findExactVisibleText("+ Nova Conversa", "button,a,[role=button],span,div") ||
+      findExactVisibleText("Nova Conversa", "button,a,[role=button],span,div");
+
+    if (exact) return exact;
+
+    return findContains(
       'button,a,[role=button],[tabindex]',
-      [
-        ["nova", "conversa"],
-        ["novo", "contato"],
-        ["iniciar", "conversa"]
-      ]
+      [["nova", "conversa"], ["novo", "contato"], ["iniciar", "conversa"]]
     );
   }
 
   function clickNewConversation() {
     const button = newConversationButton();
-    if (button) return safeClick(button, "Abrindo Nova Conversa…");
-    return false;
+    if (!button) return false;
+
+    return safeClick(button, "Abrindo Nova Conversa…");
   }
 
-  function findInputNearLabel(labelTerms) {
-    const labels = all("label,span,div,p").filter((el) => visible(el));
+  function findInputNearLabel(terms) {
+    const labels = all("label,span,div,p").filter(visible);
 
     for (const label of labels) {
-      const text = normalizeText(label.textContent);
-      if (!labelTerms.some((term) => text.includes(normalizeText(term)))) continue;
+      const text = norm(label.textContent);
+
+      if (!terms.some((term) => text.includes(norm(term)))) continue;
 
       if (label.tagName === "LABEL") {
         const nested = label.querySelector("input");
@@ -381,13 +438,22 @@
       }
 
       const lr = label.getBoundingClientRect();
+
       const nearby = all("input")
         .filter((input) => {
           if (!visible(input)) return false;
           const r = input.getBoundingClientRect();
-          return r.top >= lr.top - 10 && r.top <= lr.bottom + 120 && r.left >= lr.left - 40;
+
+          return (
+            r.top >= lr.top - 10 &&
+            r.top <= lr.bottom + 120 &&
+            r.left >= lr.left - 50
+          );
         })
-        .sort((a, b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top);
+        .sort(
+          (a, b) =>
+            a.getBoundingClientRect().top - b.getBoundingClientRect().top
+        );
 
       if (nearby[0]) return nearby[0];
     }
@@ -398,17 +464,31 @@
   function findNameInput() {
     return (
       findInputNearLabel(["nome", "nome (opcional)"]) ||
-      findText("input", [["joao", "silva"], ["nome"]])
+      findContains("input", [["joao", "silva"], ["nome"]])
     );
   }
 
   function findPhoneInput() {
     return (
-      findInputNearLabel(["telefone", "telefone (com ddd)", "celular", "whatsapp"]) ||
-      findText("input", [["11999998888"], ["telefone"]]) ||
+      findInputNearLabel([
+        "telefone",
+        "telefone (com ddd)",
+        "celular",
+        "whatsapp"
+      ]) ||
+      findContains("input", [["11999998888"], ["telefone"]]) ||
       all('input[type="tel"]').find(visible) ||
       null
     );
+  }
+
+  function modalOpen() {
+    const title = findContains(
+      '[role="dialog"] *,[aria-modal="true"] *,h1,h2,h3,strong,span,div',
+      [["nova", "conversa"]]
+    );
+
+    return Boolean(title && (findNameInput() || findPhoneInput()));
   }
 
   function setNativeValue(input, value) {
@@ -416,17 +496,28 @@
 
     try {
       input.focus();
-      const proto = input instanceof HTMLInputElement ? HTMLInputElement.prototype : HTMLTextAreaElement.prototype;
+
+      const proto =
+        input instanceof HTMLInputElement
+          ? HTMLInputElement.prototype
+          : HTMLTextAreaElement.prototype;
+
       const setter = Object.getOwnPropertyDescriptor(proto, "value")?.set;
 
       setter ? setter.call(input, "") : (input.value = "");
       input.dispatchEvent(new Event("input", { bubbles: true }));
 
       setter ? setter.call(input, value) : (input.value = value);
-      input.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: value }));
+      input.dispatchEvent(
+        new InputEvent("input", {
+          bubbles: true,
+          inputType: "insertText",
+          data: value
+        })
+      );
       input.dispatchEvent(new Event("change", { bubbles: true }));
-      input.dispatchEvent(new KeyboardEvent("keyup", { bubbles: true, key: "Tab" }));
       input.blur();
+
       return true;
     } catch {
       return false;
@@ -435,7 +526,7 @@
 
   function countrySelected() {
     return Boolean(
-      findText('button,[role=combobox],[role=button],div', [
+      findContains('button,[role=combobox],[role=button],div', [
         ["brasil", "+55"],
         ["brasil"],
         ["br", "+55"]
@@ -446,40 +537,52 @@
   function chooseBrazil() {
     if (countrySelected()) return true;
 
-    const label = findText("label,span,div,p", [["pais", "ddi"], ["pais"]]);
+    const label = findContains("label,span,div,p", [
+      ["pais", "ddi"],
+      ["pais"]
+    ]);
+
     if (!label) return false;
 
     let parent = label.parentElement;
 
     for (let i = 0; parent && i < 4; i += 1, parent = parent.parentElement) {
-      const control = [...parent.querySelectorAll('button,[role=combobox],[role=button]')].find(visible);
+      const control = [...parent.querySelectorAll(
+        'button,[role=combobox],[role=button]'
+      )].find(visible);
 
-      if (control) {
-        if (!safeClick(control, "Selecionando Brasil +55…")) return false;
+      if (!control) continue;
 
-        setTimeout(() => {
-          const brazil = findText(
-            '[role=option],[role=menuitem],button,li,div',
-            [["brasil", "+55"], ["brasil"], ["brazil", "+55"]]
-          );
+      if (!safeClick(control, "Selecionando Brasil +55…")) return false;
 
-          if (brazil) safeClick(brazil, "Brasil +55 selecionado.");
-        }, 300);
+      setTimeout(() => {
+        const brazil =
+          findExactVisibleText("Brasil +55") ||
+          findExactVisibleText("Brasil") ||
+          findContains('[role=option],[role=menuitem],button,li,div', [
+            ["brasil", "+55"],
+            ["brasil"]
+          ]);
 
-        return false;
-      }
+        if (brazil) safeClick(brazil, "Brasil +55 selecionado.", 250);
+      }, 350);
+
+      return false;
     }
 
     return false;
   }
 
   function nameValid(input) {
-    return Boolean(input && normalizeText(input.value).includes(normalizeText(lead.nome)));
+    return Boolean(
+      input && norm(input.value).includes(norm(lead.nome))
+    );
   }
 
   function phoneValid(input) {
     if (!input) return false;
     const current = digits(input.value);
+
     return current === lead.phone || current.endsWith(lead.phone);
   }
 
@@ -490,24 +593,38 @@
     const phone = findPhoneInput();
 
     if (name && !nameValid(name)) setNativeValue(name, lead.nome);
+
     chooseBrazil();
+
     if (phone && !phoneValid(phone)) setNativeValue(phone, lead.phone);
 
-    if (!nameValid(name) || !phoneValid(phone) || !countrySelected()) return false;
+    if (
+      !nameValid(name) ||
+      !phoneValid(phone) ||
+      !countrySelected()
+    ) return false;
 
-    const next = findText('button,[role=button]', [["continuar"], ["continue"]]);
-    if (!next || next.disabled || next.getAttribute("aria-disabled") === "true") return false;
+    const next = findContains(
+      'button,[role=button]',
+      [["continuar"], ["continue"]]
+    );
+
+    if (
+      !next ||
+      next.disabled ||
+      next.getAttribute("aria-disabled") === "true"
+    ) return false;
 
     if (!continueClicked) {
       continueClicked = true;
       showToast("Dados preenchidos. Clicando em Continuar…");
 
       setTimeout(() => {
-        safeClick(next, "Avançando para a próxima etapa…");
+        safeClick(next, "Avançando para a próxima etapa…", 250);
         finished = true;
         cleanParams();
         sessionStorage.removeItem(STORAGE_KEY);
-      }, 600);
+      }, 650);
     }
 
     return true;
@@ -515,58 +632,81 @@
 
   function step() {
     if (finished) return;
-
-    if (ensureFunctionalRoute()) return;
+    if (recoverBadDirectRoute()) return;
 
     if (modalOpen()) {
       fillModal();
       return;
     }
 
-    if (newConversationButton()) {
-      clickNewConversation();
-      return;
-    }
+    if (santaCruzChatLoaded()) {
+      const button = newConversationButton();
 
-    if (findUnitPanel()) {
-      if (clickSantaCruzUnit()) return;
-    }
-
-    if (chatMenuOption()) {
-      enterChatUnidades();
-      return;
-    }
-
-    if (!sidebarClicked) {
-      if (clickSidebarChatIcon()) return;
-    } else {
-      const option = chatMenuOption();
-      if (option) {
-        enterChatUnidades();
-        return;
+      if (button) {
+        clickNewConversation();
+      } else {
+        showToast("Santa Cruz selecionada. Aguardando Nova Conversa…");
       }
 
-      const unit = findUnitPanel();
+      return;
+    }
+
+    if (unitPanelVisible()) {
+      const unit = santaCruzUnitRow();
+
       if (unit) {
-        clickSantaCruzUnit();
-        return;
+        if (!unitClickedAt || Date.now() - unitClickedAt > 5000) {
+          clickSantaCruz();
+        } else {
+          showToast("Santa Cruz selecionada. Aguardando o chat carregar…");
+        }
+      } else {
+        showToast("Lista de unidades aberta. Aguardando Santa Cruz aparecer…");
       }
 
-      showToast("Menu de chats aberto. Aguardando a opção Chat Unidades…");
       return;
     }
 
-    showToast("Aguardando o painel do Scale carregar…");
+    if (menuClickedAt) {
+      const elapsed = Date.now() - menuClickedAt;
+
+      if (elapsed < 8000) {
+        showToast("Chat Unidades selecionado. Aguardando a lista de unidades…");
+        return;
+      }
+
+      // Se o painel não carregou em 8 s, reabre o menu e tenta novamente.
+      menuClickedAt = 0;
+      sidebarOpenedAt = 0;
+    }
+
+    if (sidebarIsExpanded()) {
+      clickChatUnidadesMenu();
+      return;
+    }
+
+    if (!sidebarOpenedAt || Date.now() - sidebarOpenedAt > 5000) {
+      clickSidebarIcon();
+      return;
+    }
+
+    showToast("Aguardando o menu de chats abrir…");
   }
 
-  showToast("Automação iniciada. Abrindo o menu de chats…");
+  showToast("Automação iniciada. Abrindo Chat Unidades…");
 
   const observer = new MutationObserver(() => step());
+
   observer.observe(document.documentElement, {
     childList: true,
     subtree: true,
     attributes: true,
-    attributeFilter: ["class", "aria-expanded", "aria-selected"]
+    attributeFilter: [
+      "class",
+      "aria-expanded",
+      "aria-selected",
+      "disabled"
+    ]
   });
 
   let attempts = 0;
@@ -575,12 +715,14 @@
     attempts += 1;
     step();
 
-    if (finished || attempts > 240) {
+    if (finished || attempts > 300) {
       clearInterval(timer);
       observer.disconnect();
 
       if (!finished) {
-        showToast("A automação parou nesta etapa. Envie um print dessa tela para eu ajustar.");
+        showToast(
+          "A automação parou nesta etapa. Envie um print com esta mensagem."
+        );
       }
     }
   }, 500);
