@@ -362,8 +362,8 @@ export default function DashboardPage() {
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("Todos");
   const [cityFilter, setCityFilter] = useState("Todas");
-  const [typeFilter, setTypeFilter] = useState("Todos");
   const [ownerFilter, setOwnerFilter] = useState("Todos");
+  const [activeTab, setActiveTab] = useState<DemandType>("opportunity");
   const importTypeRef = useRef<DemandType>("opportunity");
   const [notice, setNotice] = useState("");
   const [processing, setProcessing] = useState(false);
@@ -436,24 +436,29 @@ export default function DashboardPage() {
     );
   }, [owners, sessionInfo]);
 
+  const tabLeads = useMemo(
+    () => leads.filter((lead) => lead.tipo === activeTab),
+    [leads, activeTab]
+  );
+
   const cities = useMemo(
     () =>
       Array.from(
-        new Set(leads.map((lead) => lead.cidade.trim()).filter(Boolean))
+        new Set(tabLeads.map((lead) => lead.cidade.trim()).filter(Boolean))
       ).sort((a, b) => a.localeCompare(b, "pt-BR")),
-    [leads]
+    [tabLeads]
   );
 
   const ownerOptions = useMemo(() => {
-    const used = new Set(leads.map((lead) => lead.ownerUserId).filter(Boolean));
+    const used = new Set(tabLeads.map((lead) => lead.ownerUserId).filter(Boolean));
 
     return owners.filter((owner) => used.has(owner.id));
-  }, [leads, owners]);
+  }, [tabLeads, owners]);
 
   const filtered = useMemo(() => {
     const q = query.toLowerCase();
 
-    return leads.filter((lead) => {
+    return tabLeads.filter((lead) => {
       const ownerName = lead.ownerUserId
         ? ownerById.get(lead.ownerUserId)?.display_name || ""
         : "";
@@ -473,12 +478,11 @@ export default function DashboardPage() {
 
       const statusOk = statusFilter === "Todos" || lead.status === statusFilter;
       const cityOk = cityFilter === "Todas" || lead.cidade === cityFilter;
-      const typeOk = typeFilter === "Todos" || lead.tipo === typeFilter;
       const ownerOk = ownerFilter === "Todos" || lead.ownerUserId === ownerFilter;
 
-      return matches && statusOk && cityOk && typeOk && ownerOk;
+      return matches && statusOk && cityOk && ownerOk;
     });
-  }, [leads, query, statusFilter, cityFilter, typeFilter, ownerFilter, ownerById]);
+  }, [tabLeads, query, statusFilter, cityFilter, ownerFilter, ownerById]);
 
   async function addImported(items: Lead[]) {
     const currentScopeOwner = currentOwnerId;
@@ -870,7 +874,15 @@ export default function DashboardPage() {
 
   const opportunityCount = leads.filter((lead) => lead.tipo === "opportunity").length;
   const delinquentCount = leads.filter((lead) => lead.tipo === "delinquent").length;
-  const converted = leads.filter((lead) => lead.status === "Convertido").length;
+  const activeConverted = tabLeads.filter((lead) => lead.status === "Convertido").length;
+
+  function changeTab(tab: DemandType) {
+    setActiveTab(tab);
+    setCityFilter("Todas");
+    setOwnerFilter("Todos");
+    setStatusFilter("Todos");
+    setNotice("");
+  }
 
   return (
     <main className="dashboard-shell">
@@ -907,19 +919,15 @@ export default function DashboardPage() {
           />
 
           <button
-            className="primary-btn small"
-            onClick={() => openImporter("opportunity")}
+            className={activeTab === "delinquent" ? "delinquent-import-btn" : "primary-btn small"}
+            onClick={() => openImporter(activeTab)}
             disabled={processing || !loaded}
           >
-            {processing ? "Importando..." : "+ Oportunidades"}
-          </button>
-
-          <button
-            className="delinquent-import-btn"
-            onClick={() => openImporter("delinquent")}
-            disabled={processing || !loaded}
-          >
-            + Inadimplentes
+            {processing
+              ? "Importando..."
+              : activeTab === "delinquent"
+                ? "+ Importar inadimplentes"
+                : "+ Importar oportunidades"}
           </button>
 
           <button className="ghost-btn" onClick={logout}>
@@ -928,52 +936,68 @@ export default function DashboardPage() {
         </div>
       </header>
 
-      <section className="metrics metrics-five">
-        <article>
-          <span>Total da carteira</span>
-          <strong>{leads.length}</strong>
-        </article>
-        <article>
+      <section className="demand-tabs" aria-label="Tipo de demanda">
+        <button
+          type="button"
+          className={activeTab === "opportunity" ? "demand-tab active opportunity" : "demand-tab opportunity"}
+          onClick={() => changeTab("opportunity")}
+        >
           <span>Oportunidades</span>
           <strong>{opportunityCount}</strong>
-        </article>
-        <article>
+        </button>
+
+        <button
+          type="button"
+          className={activeTab === "delinquent" ? "demand-tab active delinquent" : "demand-tab delinquent"}
+          onClick={() => changeTab("delinquent")}
+        >
           <span>Inadimplentes</span>
           <strong>{delinquentCount}</strong>
+        </button>
+      </section>
+
+      <section className="metrics">
+        <article>
+          <span>Total em {activeTab === "delinquent" ? "inadimplentes" : "oportunidades"}</span>
+          <strong>{tabLeads.length}</strong>
+        </article>
+        <article>
+          <span>Novos</span>
+          <strong>{tabLeads.filter((lead) => lead.status === "Novo").length}</strong>
         </article>
         <article>
           <span>Em contato</span>
-          <strong>{leads.filter((lead) => lead.status === "Em contato").length}</strong>
+          <strong>{tabLeads.filter((lead) => lead.status === "Em contato").length}</strong>
         </article>
         <article>
           <span>Convertidos</span>
-          <strong>{converted}</strong>
+          <strong>{activeConverted}</strong>
         </article>
       </section>
 
-      <section className="import-box">
+      <section className={activeTab === "delinquent" ? "import-box delinquent-box" : "import-box"}>
         <div>
-          <strong>Importe sua demanda</strong>
+          <strong>
+            {activeTab === "delinquent"
+              ? "Importar inadimplentes"
+              : "Importar oportunidades"}
+          </strong>
           <p>
-            Escolha o tipo antes de selecionar o arquivo. Inadimplentes podem ser importados mesmo sem telefone: nesse caso o sistema organiza por nome, cidade, responsável e tipo de demanda.
+            {activeTab === "delinquent"
+              ? "O arquivo enviado nesta aba entra somente em Inadimplentes e permanece vinculado ao usuário responsável."
+              : "O arquivo enviado nesta aba entra somente em Oportunidades e permanece vinculado ao usuário responsável."}
           </p>
         </div>
 
         <div className="import-actions">
           <button
-            className="primary-btn"
-            onClick={() => openImporter("opportunity")}
+            className={activeTab === "delinquent" ? "delinquent-import-btn" : "primary-btn"}
+            onClick={() => openImporter(activeTab)}
             disabled={processing || !loaded}
           >
-            Importar oportunidades
-          </button>
-
-          <button
-            className="delinquent-import-btn"
-            onClick={() => openImporter("delinquent")}
-            disabled={processing || !loaded}
-          >
-            Importar inadimplentes
+            {activeTab === "delinquent"
+              ? "Selecionar inadimplentes"
+              : "Selecionar oportunidades"}
           </button>
         </div>
       </section>
@@ -998,15 +1022,6 @@ export default function DashboardPage() {
                 {city}
               </option>
             ))}
-          </select>
-
-          <select
-            value={typeFilter}
-            onChange={(event) => setTypeFilter(event.target.value)}
-          >
-            <option value="Todos">Todas as demandas</option>
-            <option value="opportunity">Oportunidades</option>
-            <option value="delinquent">Inadimplentes</option>
           </select>
 
           <select
@@ -1039,7 +1054,6 @@ export default function DashboardPage() {
                 <th>Lead</th>
                 <th>WhatsApp</th>
                 <th>Cidade</th>
-                <th>Demanda</th>
                 <th>Responsável</th>
                 <th>Origem</th>
                 <th>Status</th>
@@ -1073,11 +1087,6 @@ export default function DashboardPage() {
                       )}
                     </td>
                     <td>{lead.cidade || "—"}</td>
-                    <td>
-                      <span className={`demand-pill ${lead.tipo}`}>
-                        {demandLabel(lead.tipo)}
-                      </span>
-                    </td>
                     <td>
                       <strong>{owner?.display_name || "—"}</strong>
                       {owner?.username && <small>@{owner.username}</small>}
@@ -1141,8 +1150,8 @@ export default function DashboardPage() {
 
               {!filtered.length && (
                 <tr>
-                  <td colSpan={8} className="empty">
-                    Nenhum registro encontrado nesta carteira.
+                  <td colSpan={7} className="empty">
+                    Nenhum {activeTab === "delinquent" ? "inadimplente" : "registro de oportunidade"} encontrado nesta carteira.
                   </td>
                 </tr>
               )}
