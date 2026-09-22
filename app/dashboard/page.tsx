@@ -170,6 +170,80 @@ function firstValue(row: Record<string, unknown>, keys: string[]) {
   return "";
 }
 
+function normalizePhoneHeader(value: string) {
+  return normalizeHeader(value)
+    .replace(/[º°]/g, "o")
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function validPhoneDigits(value: unknown) {
+  const digits = onlyDigits(String(value ?? "").trim());
+
+  if (digits.length === 10 || digits.length === 11) return digits;
+  if ((digits.length === 12 || digits.length === 13) && digits.startsWith("55")) {
+    return digits;
+  }
+
+  return "";
+}
+
+function phoneHeaderPriority(header: string) {
+  const key = normalizePhoneHeader(header);
+
+  if (!key) return 0;
+  if (key.includes("whatsapp")) return 120;
+  if (/^(numero|no|n) (de )?telefone$/.test(key)) return 115;
+  if (key.includes("numero de telefone")) return 115;
+  if (key === "telefone" || key === "telefone principal") return 100;
+  if (key.includes("celular")) return 95;
+  if (key === "phone" || key === "fone") return 90;
+  if (key.includes("telefone")) return 80;
+
+  return 0;
+}
+
+function extractPhoneFromRow(row: Record<string, unknown>) {
+  const candidates = Object.entries(row)
+    .map(([header, value]) => {
+      const digits = validPhoneDigits(value);
+      const headerPriority = phoneHeaderPriority(header);
+      const localDigits = digits.startsWith("55") ? digits.slice(2) : digits;
+      const mobileBonus =
+        localDigits.length === 11 && localDigits.charAt(2) === "9" ? 10 : 0;
+
+      return {
+        digits,
+        score: headerPriority + mobileBonus
+      };
+    })
+    .filter((candidate) => candidate.digits && candidate.score > 0)
+    .sort((a, b) => b.score - a.score);
+
+  return candidates[0]?.digits || "";
+}
+
+function sourceIdentity(origem: string) {
+  const file = origem.split("•")[0]?.trim() || origem;
+
+  return normalizeHeader(file)
+    .replace(/\.[a-z0-9]+$/i, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function fallbackLeadIdentity(lead: Lead) {
+  const name = normalizeHeader(lead.nome).replace(/\s+/g, " ").trim();
+  const city = normalizeHeader(lead.cidade).replace(/\s+/g, " ").trim();
+  const source = sourceIdentity(lead.origem);
+
+  if (!name || !source) return "";
+
+  return `${name}|${city || "sem-cidade"}|${source}`;
+}
+
 function cityTitleCase(value: string) {
   const lowerWords = new Set(["da", "de", "do", "das", "dos", "e"]);
 
@@ -230,7 +304,7 @@ function rowsToLeads(rows: Record<string, unknown>[], origem: string): Lead[] {
     .map((row) => ({
       id: crypto.randomUUID(),
       nome: firstValue(row, ["nome", "name", "cliente", "lead", "contato"]),
-      whatsapp: firstValue(row, ["whatsapp", "telefone", "celular", "phone", "fone"]),
+      whatsapp: extractPhoneFromRow(row),
       email: firstValue(row, ["email", "e-mail", "mail"]),
       cidade:
         firstValue(row, ["cidade", "municipio", "município", "city", "localidade"]) ||
@@ -407,43 +481,98 @@ export default function DashboardPage() {
   }, [leads, query, statusFilter, cityFilter, typeFilter, ownerFilter, ownerById]);
 
   async function addImported(items: Lead[]) {
-    const scopeKey = (lead: Lead, ownerId: string | null) => {
-      const contact = leadKey(lead);
-      if (!contact) return "";
-      return `${ownerId || "__current__"}|${lead.tipo}|${contact}`;
-    };
+    const currentScopeOwner = currentOwnerId;
 
-    const existingByKey = new Map(
-      leads
-        .map((lead) => [
-          scopeKey(lead, lead.ownerUserId),
-          lead
-        ] as const)
-        .filter(([key]) => Boolean(key))
+    const scopedExisting = leads.filter(
+      (lead) => lead.ownerUserId === currentScopeOwner
     );
 
+    function createUniqueIndex(getKey: (lead: Lead) => string) {
+      const index = new Map<string, Lead | null>();
+
+      for (const lead of scopedExisting) {
+        const key = getKey(lead);
+        if (!key) continue;
+
+        if (index.has(key)) {
+          index.set(key, null);
+        } else {
+          index.set(key, lead);
+        }
+      }
+
+      return index;
+    }
+
+    const phoneIndex = createUniqueIndex((lead) => {
+      const phone = normalizeWhatsApp(lead.whatsapp);
+      return phone ? `${lead.tipo}|${phone}` : "";
+    });
+
+    const emailIndex = createUniqueIndex((lead) => {
+      const email = lead.email.toLowerCase().trim();
+      return email ? `${lead.tipo}|${email}` : "";
+    });
+
+    const fallbackIndex = createUniqueIndex((lead) => {
+      const fallback = fallbackLeadIdentity(lead);
+      return fallback ? `${lead.tipo}|${fallback}` : "";
+    });
+
     const fresh: Lead[] = [];
-    const cityUpdates = new Map<string, string[]>();
+    const enrichById = new Map<
+      string,
+      { id: string; whatsapp?: string; city?: string }
+    >();
 
     for (const imported of items) {
-      const key = scopeKey(imported, currentOwnerId);
-      if (!key) continue;
+      const importedPhone = normalizeWhatsApp(imported.whatsapp);
+      const importedEmail = imported.email.toLowerCase().trim();
+      const fallback = fallbackLeadIdentity(imported);
 
-      const existing = existingByKey.get(key);
+      const phoneMatch = importedPhone
+        ? phoneIndex.get(`${imported.tipo}|${importedPhone}`)
+        : undefined;
+
+      const emailMatch = importedEmail
+        ? emailIndex.get(`${imported.tipo}|${importedEmail}`)
+        : undefined;
+
+      const fallbackMatch = fallback
+        ? fallbackIndex.get(`${imported.tipo}|${fallback}`)
+        : undefined;
+
+      const existing =
+        phoneMatch ||
+        emailMatch ||
+        fallbackMatch ||
+        null;
 
       if (!existing) {
-        existingByKey.set(key, imported);
         fresh.push(imported);
         continue;
       }
 
-      const importedCity = imported.cidade.trim();
-      const existingCity = existing.cidade.trim();
+      const update: { id: string; whatsapp?: string; city?: string } = {
+        id: existing.id
+      };
 
-      if (importedCity && !existingCity) {
-        const ids = cityUpdates.get(importedCity) || [];
-        ids.push(existing.id);
-        cityUpdates.set(importedCity, ids);
+      const existingPhone = validPhoneDigits(existing.whatsapp);
+      const newPhone = validPhoneDigits(imported.whatsapp);
+
+      if (!existingPhone && newPhone) {
+        update.whatsapp = newPhone;
+      }
+
+      if (!existing.cidade.trim() && imported.cidade.trim()) {
+        update.city = imported.cidade.trim();
+      }
+
+      if (update.whatsapp || update.city) {
+        enrichById.set(existing.id, {
+          ...(enrichById.get(existing.id) || { id: existing.id }),
+          ...update
+        });
       }
     }
 
@@ -466,52 +595,59 @@ export default function DashboardPage() {
       const saved = savedRows.map(dbToLead);
 
       added = saved.length;
-      skipped = Math.max(0, fresh.length - saved.length);
+      skipped += Math.max(0, fresh.length - saved.length);
 
       if (saved.length) {
         setLeads((current) => [...saved, ...current]);
       }
     }
 
-    for (const [city, ids] of cityUpdates) {
-      for (let index = 0; index < ids.length; index += 40) {
-        const chunk = ids.slice(index, index + 40);
-        const idFilter = chunk.map((id) => `"${id}"`).join(",");
+    const enrichPayload = Array.from(enrichById.values());
 
-        const response = await supabaseRequest(
-          `/rest/v1/commercial_leads?id=in.(${encodeURIComponent(idFilter)})&select=id,name,whatsapp,email,city,source,status,demand_type,owner_user_id,created_at`,
-          {
-            method: "PATCH",
-            headers: { Prefer: "return=representation" },
-            body: JSON.stringify({ city })
-          }
+    if (enrichPayload.length) {
+      const response = await supabaseRequest(
+        "/rest/v1/rpc/commercial_enrich_leads",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            p_updates: enrichPayload
+          })
+        }
+      );
+
+      const updatedRows = (await response.json()) as DbLead[];
+      enriched = updatedRows.length;
+
+      if (updatedRows.length) {
+        const updates = new Map(
+          updatedRows.map((row) => [row.id, dbToLead(row)] as const)
         );
 
-        const updatedRows = (await response.json()) as DbLead[];
-        enriched += updatedRows.length;
-
-        if (updatedRows.length) {
-          const updates = new Map(
-            updatedRows.map((row) => [row.id, dbToLead(row)] as const)
-          );
-
-          setLeads((current) =>
-            current.map((lead) => updates.get(lead.id) || lead)
-          );
-        }
+        setLeads((current) =>
+          current.map((lead) => updates.get(lead.id) || lead)
+        );
       }
     }
 
-    if (!added && !enriched && !skipped) {
-      setNotice("Nenhum registro novo foi encontrado.");
+    skipped += Math.max(
+      0,
+      items.length - fresh.length - enrichPayload.length
+    );
+
+    if (!added && !enriched) {
+      setNotice(
+        skipped
+          ? `${skipped} registro(s) já estavam completos nesta carteira.`
+          : "Nenhum registro novo foi encontrado."
+      );
       return;
     }
 
     const parts: string[] = [];
 
     if (added) parts.push(`${added} registro(s) importado(s)`);
-    if (enriched) parts.push(`${enriched} atualizado(s) com cidade`);
-    if (skipped) parts.push(`${skipped} duplicado(s) da mesma carteira ignorado(s)`);
+    if (enriched) parts.push(`${enriched} atualizado(s) com telefone/cidade`);
+    if (skipped) parts.push(`${skipped} já existente(s)`);
 
     setNotice(parts.join(" · ") + ".");
   }
