@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Leads Comercial → Scale",
-  "version": "2.4.0",
-  "description": "Detecta uma aba já aberta do Scale e preenche somente nome e telefone no modal Nova Conversa.",
+  "version": "2.5.0",
+  "description": "Preenche diretamente os campos Nome e Telefone do modal Nova Conversa do Scale usando os placeholders reais.",
   "permissions": [
     "storage",
     "tabs",
