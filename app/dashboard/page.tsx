@@ -27,7 +27,7 @@ const LEGACY_STORAGE_KEY = "leads-comercial";
 type SessionInfo = {
   username: string;
   displayName: string;
-  role: "admin" | "user";
+  role: "admin" | "commercial" | "user";
   unitId: string | null;
   unitName: string | null;
 };
@@ -618,7 +618,9 @@ export default function DashboardPage() {
             <p className="session-line">
               {sessionInfo.role === "admin"
                 ? `Administrador · ${sessionInfo.displayName}`
-                : `Unidade ${sessionInfo.unitName || "—"} · ${sessionInfo.displayName}`}
+                : sessionInfo.role === "commercial"
+                  ? `Setor Comercial · ${sessionInfo.displayName}`
+                  : `Unidade ${sessionInfo.unitName || "—"} · ${sessionInfo.displayName}`}
             </p>
           )}
         </div>
