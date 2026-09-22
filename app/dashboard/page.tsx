@@ -125,13 +125,64 @@ function firstValue(row: Record<string, unknown>, keys: string[]) {
   return "";
 }
 
+function cityTitleCase(value: string) {
+  const lowerWords = new Set(["da", "de", "do", "das", "dos", "e"]);
+
+  return value
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((word, index) => {
+      const lower = word.toLowerCase();
+      if (index > 0 && lowerWords.has(lower)) return lower;
+      return lower.charAt(0).toUpperCase() + lower.slice(1);
+    })
+    .join(" ");
+}
+
+function inferCityFromSource(origem: string) {
+  const rawFile = origem.split("•")[0]?.trim() || "";
+  const withoutExtension = rawFile.replace(/\.[a-z0-9]+$/i, "");
+  const normalized = normalizeHeader(withoutExtension)
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (!normalized) return "";
+
+  // Padrão usado nas bases "oportunidades CIDADE responsável".
+  // Ex.: "oportunidades cascavel irani.xlsx" => Cascavel.
+  const opportunity = normalized.match(/^oportunidades?\s+([^\s]+)/);
+  if (opportunity?.[1]) {
+    return cityTitleCase(opportunity[1]);
+  }
+
+  // Bases nomeadas como "leads blumenau.xlsx" ou
+  // "leads santa cruz do sul.xlsx" usam todo o restante como cidade.
+  const leads = normalized.match(/^leads?\s+(?:de\s+)?(.+)$/);
+  if (leads?.[1]) {
+    return cityTitleCase(leads[1]);
+  }
+
+  // Outros formatos simples que podemos reconhecer automaticamente.
+  const generic = normalized.match(
+    /^(?:contatos?|clientes?|base|lista|prospectos?|prospeccao)\s+(?:de\s+)?(.+)$/
+  );
+  if (generic?.[1]) {
+    return cityTitleCase(generic[1]);
+  }
+
+  return "";
+}
+
 function rowsToLeads(rows: Record<string, unknown>[], origem: string): Lead[] {
   return rows.map((row) => ({
     id: crypto.randomUUID(),
     nome: firstValue(row, ["nome", "name", "cliente", "lead", "contato"]),
     whatsapp: firstValue(row, ["whatsapp", "telefone", "celular", "phone", "fone"]),
     email: firstValue(row, ["email", "e-mail", "mail"]),
-    cidade: firstValue(row, ["cidade", "municipio", "município", "city", "localidade"]),
+    cidade:
+      firstValue(row, ["cidade", "municipio", "município", "city", "localidade"]) ||
+      inferCityFromSource(origem),
     origem,
     status: "Novo",
     criadoEm: new Date().toISOString()
@@ -158,7 +209,7 @@ function textToLeads(text: string, origem: string): Lead[] {
       nome,
       whatsapp: phones[0] || "",
       email: emails[0] || "",
-      cidade: "",
+      cidade: inferCityFromSource(origem),
       origem,
       status: "Novo",
       criadoEm: new Date().toISOString()
