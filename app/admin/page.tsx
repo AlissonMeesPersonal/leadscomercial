@@ -19,7 +19,7 @@ type CommercialUser = {
   id: string;
   username: string;
   display_name: string;
-  role: "admin" | "user";
+  role: "admin" | "commercial" | "user";
   unit_id: string | null;
   active: boolean;
   last_login_at: string | null;
@@ -74,7 +74,7 @@ export default function AdminPage() {
   const [displayName, setDisplayName] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState<"admin" | "user">("user");
+  const [role, setRole] = useState<"admin" | "commercial" | "user">("user");
   const [unitId, setUnitId] = useState("");
 
   const activeUnits = useMemo(
@@ -358,12 +358,13 @@ export default function AdminPage() {
               <select
                 value={role}
                 onChange={(event) => {
-                  const next = event.target.value as "admin" | "user";
+                  const next = event.target.value as "admin" | "commercial" | "user";
                   setRole(next);
-                  if (next === "admin") setUnitId("");
+                  if (next !== "user") setUnitId("");
                 }}
               >
                 <option value="user">Usuário da unidade</option>
+                <option value="commercial">Setor Comercial</option>
                 <option value="admin">Administrador</option>
               </select>
             </label>
@@ -376,7 +377,7 @@ export default function AdminPage() {
                 required={role === "user"}
               >
                 <option value="">
-                  {role === "admin" ? "Todas as unidades" : "Selecione a unidade"}
+                  {role === "user" ? "Selecione a unidade" : "Todas as unidades"}
                 </option>
                 {activeUnits.map((unit) => (
                   <option value={unit.id} key={unit.id}>
@@ -424,7 +425,7 @@ export default function AdminPage() {
                       <strong>{user.display_name}</strong>
                       <small>@{user.username}</small>
                     </td>
-                    <td>{user.role === "admin" ? "Administrador" : "Usuário"}</td>
+                    <td>{user.role === "admin" ? "Administrador" : user.role === "commercial" ? "Setor Comercial" : "Usuário"}</td>
                     <td>{unit ? `${unit.name} · ${unit.city}` : "Todas"}</td>
                     <td>
                       <span className={user.active ? "status-pill active" : "status-pill inactive"}>
