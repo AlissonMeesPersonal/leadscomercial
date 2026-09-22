@@ -301,7 +301,7 @@ html[data-theme="light"] .import-box {
 
 .filters {
   display: grid;
-  grid-template-columns: 1fr 210px;
+  grid-template-columns: minmax(260px, 1fr) 210px 210px;
   gap: 12px;
   padding: 16px;
   border-bottom: 1px solid var(--line);
