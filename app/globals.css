@@ -316,6 +316,24 @@ html[data-theme="light"] .import-box {
   line-height: 1.5;
 }
 
+.live-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 9px;
+  color: #b7bbc4;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.live-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--green);
+  box-shadow: 0 0 0 4px var(--green-soft);
+}
+
 .leads-card {
   background: var(--card);
   border: 1px solid var(--line);
