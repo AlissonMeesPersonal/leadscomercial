@@ -363,6 +363,7 @@ export default function DashboardPage() {
   const [statusFilter, setStatusFilter] = useState("Todos");
   const [cityFilter, setCityFilter] = useState("Todas");
   const [ownerFilter, setOwnerFilter] = useState("Todos");
+  const [sortOrder, setSortOrder] = useState<"recent" | "az" | "za">("recent");
   const [activeTab, setActiveTab] = useState<DemandType>("opportunity");
   const importTypeRef = useRef<DemandType>("opportunity");
   const [notice, setNotice] = useState("");
@@ -458,7 +459,7 @@ export default function DashboardPage() {
   const filtered = useMemo(() => {
     const q = query.toLowerCase();
 
-    return tabLeads.filter((lead) => {
+    const result = tabLeads.filter((lead) => {
       const ownerName = lead.ownerUserId
         ? ownerById.get(lead.ownerUserId)?.display_name || ""
         : "";
@@ -482,7 +483,23 @@ export default function DashboardPage() {
 
       return matches && statusOk && cityOk && ownerOk;
     });
-  }, [tabLeads, query, statusFilter, cityFilter, ownerFilter, ownerById]);
+
+    return result.sort((a, b) => {
+      if (sortOrder === "az") {
+        return (a.nome || "").localeCompare(b.nome || "", "pt-BR", {
+          sensitivity: "base"
+        });
+      }
+
+      if (sortOrder === "za") {
+        return (b.nome || "").localeCompare(a.nome || "", "pt-BR", {
+          sensitivity: "base"
+        });
+      }
+
+      return new Date(b.criadoEm).getTime() - new Date(a.criadoEm).getTime();
+    });
+  }, [tabLeads, query, statusFilter, cityFilter, ownerFilter, ownerById, sortOrder]);
 
   async function addImported(items: Lead[]) {
     const currentScopeOwner = currentOwnerId;
@@ -895,7 +912,7 @@ export default function DashboardPage() {
               {sessionInfo.role === "admin"
                 ? `Administrador · ${sessionInfo.displayName}`
                 : sessionInfo.role === "commercial"
-                  ? `Setor Comercial · todas as unidades · ${sessionInfo.displayName}`
+                  ? `Setor Comercial · carteira própria · todas as cidades · ${sessionInfo.displayName}`
                   : `Unidade ${sessionInfo.unitName || "—"} · carteira de ${sessionInfo.displayName}`}
             </p>
           )}
@@ -1044,6 +1061,18 @@ export default function DashboardPage() {
             {statusList.map((status) => (
               <option key={status}>{status}</option>
             ))}
+          </select>
+
+          <select
+            value={sortOrder}
+            onChange={(event) =>
+              setSortOrder(event.target.value as "recent" | "az" | "za")
+            }
+            aria-label="Ordenar clientes"
+          >
+            <option value="recent">Mais recentes</option>
+            <option value="az">Nome A–Z</option>
+            <option value="za">Nome Z–A</option>
           </select>
         </div>
 
