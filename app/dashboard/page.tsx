@@ -18,6 +18,7 @@ type Lead = {
   status: Status;
   tipo: DemandType;
   ownerUserId: string | null;
+  unitId: string | null;
   criadoEm: string;
 };
 
@@ -39,7 +40,14 @@ type DbLead = {
   status: Status;
   demand_type: DemandType;
   owner_user_id: string | null;
+  unit_id: string | null;
   created_at: string;
+};
+
+type UnitInfo = {
+  id: string;
+  name: string;
+  city: string;
 };
 
 type OwnerUser = {
@@ -96,6 +104,7 @@ function dbToLead(row: DbLead): Lead {
     status: row.status,
     tipo: row.demand_type || "opportunity",
     ownerUserId: row.owner_user_id || null,
+    unitId: row.unit_id || null,
     criadoEm: row.created_at
   };
 }
@@ -313,6 +322,7 @@ function rowsToLeads(rows: Record<string, unknown>[], origem: string): Lead[] {
       status: "Novo" as Status,
       tipo: inferDemandTypeFromSource(origem),
       ownerUserId: null,
+      unitId: null,
       criadoEm: new Date().toISOString()
     }))
     .filter((lead) => lead.nome || lead.whatsapp || lead.email);
@@ -347,6 +357,7 @@ function textToLeads(text: string, origem: string): Lead[] {
       status: "Novo",
       tipo: inferDemandTypeFromSource(origem),
       ownerUserId: null,
+      unitId: null,
       criadoEm: new Date().toISOString()
     });
   }
@@ -358,10 +369,11 @@ export default function DashboardPage() {
   const inputRef = useRef<HTMLInputElement>(null);
   const [leads, setLeads] = useState<Lead[]>([]);
   const [owners, setOwners] = useState<OwnerUser[]>([]);
+  const [units, setUnits] = useState<UnitInfo[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("Todos");
-  const [cityFilter, setCityFilter] = useState("Todas");
+  const [unitFilter, setUnitFilter] = useState("Todas");
   const [ownerFilter, setOwnerFilter] = useState("Todos");
   const [sortOrder, setSortOrder] = useState<"recent" | "az" | "za">("recent");
   const [activeTab, setActiveTab] = useState<DemandType>("opportunity");
@@ -380,31 +392,37 @@ export default function DashboardPage() {
       }
 
       try {
-        const [sessionResponse, leadResponse, ownerResponse] = await Promise.all([
-          fetch("/api/session", { cache: "no-store" }),
-          supabaseRequest(
-            "/rest/v1/commercial_leads?select=id,name,whatsapp,email,city,source,status,demand_type,owner_user_id,created_at&order=created_at.desc"
-          ),
-          supabaseRequest(
-            "/rest/v1/commercial_users?select=id,username,display_name,role&active=eq.true&order=display_name.asc"
-          )
-        ]);
+        const [sessionResponse, leadResponse, ownerResponse, unitResponse] =
+          await Promise.all([
+            fetch("/api/session", { cache: "no-store" }),
+            supabaseRequest(
+              "/rest/v1/commercial_leads?select=id,name,whatsapp,email,city,source,status,demand_type,owner_user_id,unit_id,created_at&order=created_at.desc"
+            ),
+            supabaseRequest(
+              "/rest/v1/commercial_users?select=id,username,display_name,role&active=eq.true&order=display_name.asc"
+            ),
+            supabaseRequest(
+              "/rest/v1/commercial_units?select=id,name,city&active=eq.true&order=name.asc"
+            )
+          ]);
 
         if (!sessionResponse.ok) {
           location.href = "/login";
           return;
         }
 
-        const [session, leadRows, ownerRows] = await Promise.all([
+        const [session, leadRows, ownerRows, unitRows] = await Promise.all([
           sessionResponse.json() as Promise<SessionInfo>,
           leadResponse.json() as Promise<DbLead[]>,
-          ownerResponse.json() as Promise<OwnerUser[]>
+          ownerResponse.json() as Promise<OwnerUser[]>,
+          unitResponse.json() as Promise<UnitInfo[]>
         ]);
 
         if (!cancelled) {
           setSessionInfo(session);
           setLeads(leadRows.map(dbToLead));
           setOwners(ownerRows);
+          setUnits(unitRows);
           setNotice("");
         }
       } catch (err) {
@@ -422,6 +440,50 @@ export default function DashboardPage() {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (!loaded || !sessionInfo) return;
+
+    let cancelled = false;
+    let refreshing = false;
+
+    async function refreshLeads() {
+      if (refreshing) return;
+      refreshing = true;
+
+      try {
+        const response = await supabaseRequest(
+          "/rest/v1/commercial_leads?select=id,name,whatsapp,email,city,source,status,demand_type,owner_user_id,unit_id,created_at&order=created_at.desc"
+        );
+        const rows = (await response.json()) as DbLead[];
+
+        if (!cancelled) {
+          setLeads(rows.map(dbToLead));
+        }
+      } catch {
+        // A atualização automática é silenciosa; erros continuam visíveis
+        // nas ações manuais do usuário.
+      } finally {
+        refreshing = false;
+      }
+    }
+
+    const timer = window.setInterval(() => {
+      void refreshLeads();
+    }, 4000);
+
+    const handleFocus = () => {
+      void refreshLeads();
+    };
+
+    window.addEventListener("focus", handleFocus);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+      window.removeEventListener("focus", handleFocus);
+    };
+  }, [loaded, sessionInfo]);
 
   const ownerById = useMemo(
     () => new Map(owners.map((owner) => [owner.id, owner] as const)),
@@ -442,24 +504,39 @@ export default function DashboardPage() {
     [leads, activeTab]
   );
 
-  const cities = useMemo(
-    () =>
-      Array.from(
-        new Set(tabLeads.map((lead) => lead.cidade.trim()).filter(Boolean))
-      ).sort((a, b) => a.localeCompare(b, "pt-BR")),
-    [tabLeads]
+  const unitById = useMemo(
+    () => new Map(units.map((unit) => [unit.id, unit] as const)),
+    [units]
   );
 
+  const unitScopedLeads = useMemo(() => {
+    if (unitFilter === "Todas") return tabLeads;
+
+    const selectedUnit = unitById.get(unitFilter);
+
+    return tabLeads.filter((lead) => {
+      if (lead.unitId) return lead.unitId === unitFilter;
+
+      return Boolean(
+        selectedUnit &&
+          lead.cidade &&
+          normalizeHeader(lead.cidade) === normalizeHeader(selectedUnit.city)
+      );
+    });
+  }, [tabLeads, unitFilter, unitById]);
+
   const ownerOptions = useMemo(() => {
-    const used = new Set(tabLeads.map((lead) => lead.ownerUserId).filter(Boolean));
+    const used = new Set(
+      unitScopedLeads.map((lead) => lead.ownerUserId).filter(Boolean)
+    );
 
     return owners.filter((owner) => used.has(owner.id));
-  }, [tabLeads, owners]);
+  }, [unitScopedLeads, owners]);
 
   const filtered = useMemo(() => {
     const q = query.toLowerCase();
 
-    const result = tabLeads.filter((lead) => {
+    const result = unitScopedLeads.filter((lead) => {
       const ownerName = lead.ownerUserId
         ? ownerById.get(lead.ownerUserId)?.display_name || ""
         : "";
@@ -478,10 +555,9 @@ export default function DashboardPage() {
         .includes(q);
 
       const statusOk = statusFilter === "Todos" || lead.status === statusFilter;
-      const cityOk = cityFilter === "Todas" || lead.cidade === cityFilter;
       const ownerOk = ownerFilter === "Todos" || lead.ownerUserId === ownerFilter;
 
-      return matches && statusOk && cityOk && ownerOk;
+      return matches && statusOk && ownerOk;
     });
 
     return result.sort((a, b) => {
@@ -499,7 +575,7 @@ export default function DashboardPage() {
 
       return new Date(b.criadoEm).getTime() - new Date(a.criadoEm).getTime();
     });
-  }, [tabLeads, query, statusFilter, cityFilter, ownerFilter, ownerById, sortOrder]);
+  }, [unitScopedLeads, query, statusFilter, ownerFilter, ownerById, sortOrder]);
 
   async function addImported(items: Lead[]) {
     const currentScopeOwner = currentOwnerId;
@@ -765,7 +841,7 @@ export default function DashboardPage() {
   async function updateStatus(id: string, status: Status) {
     try {
       const response = await supabaseRequest(
-        `/rest/v1/commercial_leads?id=eq.${encodeURIComponent(id)}&select=id,name,whatsapp,email,city,source,status,demand_type,owner_user_id,created_at`,
+        `/rest/v1/commercial_leads?id=eq.${encodeURIComponent(id)}&select=id,name,whatsapp,email,city,source,status,demand_type,owner_user_id,unit_id,created_at`,
         {
           method: "PATCH",
           headers: { Prefer: "return=representation" },
@@ -889,13 +965,34 @@ export default function DashboardPage() {
     location.href = "/login";
   }
 
-  const opportunityCount = leads.filter((lead) => lead.tipo === "opportunity").length;
-  const delinquentCount = leads.filter((lead) => lead.tipo === "delinquent").length;
-  const activeConverted = tabLeads.filter((lead) => lead.status === "Convertido").length;
+  const allUnitScopedLeads = useMemo(() => {
+    if (unitFilter === "Todas") return leads;
+
+    const selectedUnit = unitById.get(unitFilter);
+
+    return leads.filter((lead) => {
+      if (lead.unitId) return lead.unitId === unitFilter;
+
+      return Boolean(
+        selectedUnit &&
+          lead.cidade &&
+          normalizeHeader(lead.cidade) === normalizeHeader(selectedUnit.city)
+      );
+    });
+  }, [leads, unitFilter, unitById]);
+
+  const opportunityCount = allUnitScopedLeads.filter(
+    (lead) => lead.tipo === "opportunity"
+  ).length;
+  const delinquentCount = allUnitScopedLeads.filter(
+    (lead) => lead.tipo === "delinquent"
+  ).length;
+  const activeConverted = unitScopedLeads.filter(
+    (lead) => lead.status === "Convertido"
+  ).length;
 
   function changeTab(tab: DemandType) {
     setActiveTab(tab);
-    setCityFilter("Todas");
     setOwnerFilter("Todos");
     setStatusFilter("Todos");
     setNotice("");
@@ -912,7 +1009,11 @@ export default function DashboardPage() {
               {sessionInfo.role === "admin"
                 ? `Administrador · ${sessionInfo.displayName}`
                 : sessionInfo.role === "commercial"
-                  ? `Setor Comercial · carteira própria · todas as cidades · ${sessionInfo.displayName}`
+                  ? `Setor Comercial · carteira própria · ${
+                      unitFilter === "Todas"
+                        ? "todas as unidades"
+                        : unitById.get(unitFilter)?.name || "unidade selecionada"
+                    } · ${sessionInfo.displayName}`
                   : `Unidade ${sessionInfo.unitName || "—"} · carteira de ${sessionInfo.displayName}`}
             </p>
           )}
@@ -976,7 +1077,7 @@ export default function DashboardPage() {
       <section className="metrics">
         <article>
           <span>Total em {activeTab === "delinquent" ? "inadimplentes" : "oportunidades"}</span>
-          <strong>{tabLeads.length}</strong>
+          <strong>{unitScopedLeads.length}</strong>
         </article>
         <article>
           <span>Novos</span>
@@ -994,6 +1095,10 @@ export default function DashboardPage() {
 
       <section className={activeTab === "delinquent" ? "import-box delinquent-box" : "import-box"}>
         <div>
+          <div className="live-status">
+            <span className="live-dot" aria-hidden="true" />
+            Atualização automática ativa
+          </div>
           <strong>
             {activeTab === "delinquent"
               ? "Importar inadimplentes"
@@ -1024,19 +1129,23 @@ export default function DashboardPage() {
       <section className="leads-card">
         <div className="filters filters-demand">
           <input
-            placeholder="Buscar por nome, telefone, cidade, responsável..."
+            placeholder="Buscar por nome, telefone, unidade, responsável..."
             value={query}
             onChange={(event) => setQuery(event.target.value)}
           />
 
           <select
-            value={cityFilter}
-            onChange={(event) => setCityFilter(event.target.value)}
+            value={unitFilter}
+            onChange={(event) => {
+              setUnitFilter(event.target.value);
+              setOwnerFilter("Todos");
+            }}
+            aria-label="Selecionar unidade"
           >
-            <option value="Todas">Todas as cidades</option>
-            {cities.map((city) => (
-              <option key={city} value={city}>
-                {city}
+            <option value="Todas">Todas as unidades</option>
+            {units.map((unit) => (
+              <option key={unit.id} value={unit.id}>
+                {unit.name}
               </option>
             ))}
           </select>
@@ -1082,7 +1191,7 @@ export default function DashboardPage() {
               <tr>
                 <th>Lead</th>
                 <th>WhatsApp</th>
-                <th>Cidade</th>
+                <th>Unidade</th>
                 <th>Responsável</th>
                 <th>Origem</th>
                 <th>Status</th>
@@ -1115,7 +1224,16 @@ export default function DashboardPage() {
                         <span className="no-phone">Sem telefone</span>
                       )}
                     </td>
-                    <td>{lead.cidade || "—"}</td>
+                    <td>
+                      <strong>
+                        {lead.unitId
+                          ? unitById.get(lead.unitId)?.name || lead.cidade || "—"
+                          : lead.cidade || "—"}
+                      </strong>
+                      {lead.unitId && unitById.get(lead.unitId)?.city && (
+                        <small>{unitById.get(lead.unitId)?.city}</small>
+                      )}
+                    </td>
                     <td>
                       <strong>{owner?.display_name || "—"}</strong>
                       {owner?.username && <small>@{owner.username}</small>}
