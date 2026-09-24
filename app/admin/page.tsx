@@ -336,6 +336,14 @@ export default function AdminPage() {
 
         <div className="topbar-actions">
           <ThemeToggle />
+          <button
+            className="ghost-btn"
+            type="button"
+            onClick={() => void loadData()}
+            disabled={loading}
+          >
+            {loading ? "Atualizando..." : "Atualizar dados"}
+          </button>
           <a className="ghost-btn admin-link" href="/dashboard">
             Voltar aos leads
           </a>
