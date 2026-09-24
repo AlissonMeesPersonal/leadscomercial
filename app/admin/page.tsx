@@ -26,6 +26,24 @@ type CommercialUser = {
   created_at: string;
 };
 
+type LeadActivity = {
+  owner_user_id: string | null;
+  demand_type: "opportunity" | "delinquent";
+  status: "Novo" | "Em contato" | "Interessado" | "Sem retorno" | "Convertido";
+  source: string;
+  created_at: string;
+};
+
+type UserLeadStats = {
+  total: number;
+  imported: number;
+  evo: number;
+  opportunities: number;
+  delinquents: number;
+  converted: number;
+  newestLeadAt: string | null;
+};
+
 async function supabaseRequest(path: string, init: RequestInit = {}) {
   const access = sessionStorage.getItem(COMMERCIAL_ACCESS_KEY);
 
@@ -65,6 +83,7 @@ async function supabaseRequest(path: string, init: RequestInit = {}) {
 export default function AdminPage() {
   const [units, setUnits] = useState<Unit[]>([]);
   const [users, setUsers] = useState<CommercialUser[]>([]);
+  const [leadActivity, setLeadActivity] = useState<LeadActivity[]>([]);
   const [loading, setLoading] = useState(true);
   const [notice, setNotice] = useState("");
 
@@ -87,6 +106,72 @@ export default function AdminPage() {
     [units]
   );
 
+  const userStats = useMemo(() => {
+    const stats = new Map<string, UserLeadStats>();
+
+    for (const user of users) {
+      stats.set(user.id, {
+        total: 0,
+        imported: 0,
+        evo: 0,
+        opportunities: 0,
+        delinquents: 0,
+        converted: 0,
+        newestLeadAt: null
+      });
+    }
+
+    for (const lead of leadActivity) {
+      if (!lead.owner_user_id) continue;
+
+      const current = stats.get(lead.owner_user_id);
+      if (!current) continue;
+
+      current.total += 1;
+
+      if ((lead.source || "").startsWith("EVO ·")) {
+        current.evo += 1;
+      } else {
+        current.imported += 1;
+      }
+
+      if (lead.demand_type === "opportunity") {
+        current.opportunities += 1;
+      } else {
+        current.delinquents += 1;
+      }
+
+      if (lead.status === "Convertido") {
+        current.converted += 1;
+      }
+
+      if (
+        !current.newestLeadAt ||
+        new Date(lead.created_at).getTime() >
+          new Date(current.newestLeadAt).getTime()
+      ) {
+        current.newestLeadAt = lead.created_at;
+      }
+    }
+
+    return stats;
+  }, [users, leadActivity]);
+
+  const adminTotals = useMemo(() => {
+    const totalLeads = leadActivity.length;
+    const imported = leadActivity.filter(
+      (lead) => !(lead.source || "").startsWith("EVO ·")
+    ).length;
+    const evo = totalLeads - imported;
+
+    return {
+      activeUsers: users.filter((user) => user.active).length,
+      totalLeads,
+      imported,
+      evo
+    };
+  }, [users, leadActivity]);
+
   async function loadData() {
     if (!sessionStorage.getItem(COMMERCIAL_ACCESS_KEY)) {
       location.href = "/login";
@@ -96,22 +181,27 @@ export default function AdminPage() {
     setLoading(true);
 
     try {
-      const [unitResponse, userResponse] = await Promise.all([
+      const [unitResponse, userResponse, leadResponse] = await Promise.all([
         supabaseRequest(
           "/rest/v1/commercial_units?select=id,name,city,active,created_at&order=name.asc"
         ),
         supabaseRequest(
           "/rest/v1/commercial_users?select=id,username,display_name,role,unit_id,active,last_login_at,created_at&order=created_at.asc"
+        ),
+        supabaseRequest(
+          "/rest/v1/commercial_leads?select=owner_user_id,demand_type,status,source,created_at&order=created_at.desc"
         )
       ]);
 
-      const [unitRows, userRows] = await Promise.all([
+      const [unitRows, userRows, leadRows] = await Promise.all([
         unitResponse.json() as Promise<Unit[]>,
-        userResponse.json() as Promise<CommercialUser[]>
+        userResponse.json() as Promise<CommercialUser[]>,
+        leadResponse.json() as Promise<LeadActivity[]>
       ]);
 
       setUnits(unitRows);
       setUsers(userRows);
+      setLeadActivity(leadRows);
     } catch (err) {
       setNotice(
         err instanceof Error ? err.message : "Não foi possível carregar o painel."
@@ -240,7 +330,7 @@ export default function AdminPage() {
           <p className="eyebrow">ADMINISTRAÇÃO</p>
           <h1>Usuários e unidades</h1>
           <p className="session-line">
-            Cada usuário comum visualiza somente os leads vinculados à sua unidade.
+            Controle de acessos, unidades e volume de leads por usuário.
           </p>
         </div>
 
@@ -253,6 +343,25 @@ export default function AdminPage() {
       </header>
 
       {notice && <div className="notice">{notice}</div>}
+
+      <section className="metrics admin-metrics">
+        <article>
+          <span>Usuários ativos</span>
+          <strong>{adminTotals.activeUsers}</strong>
+        </article>
+        <article>
+          <span>Leads cadastrados</span>
+          <strong>{adminTotals.totalLeads}</strong>
+        </article>
+        <article>
+          <span>Leads importados</span>
+          <strong>{adminTotals.imported}</strong>
+        </article>
+        <article>
+          <span>Entradas automáticas EVO</span>
+          <strong>{adminTotals.evo}</strong>
+        </article>
+      </section>
 
       <section className="admin-grid">
         <article className="admin-card">
@@ -407,10 +516,11 @@ export default function AdminPage() {
             <thead>
               <tr>
                 <th>Usuário</th>
-                <th>Perfil</th>
-                <th>Unidade</th>
+                <th>Perfil / Unidade</th>
                 <th>Status</th>
-                <th>Último acesso</th>
+                <th>Acesso</th>
+                <th>Leads</th>
+                <th>Demandas</th>
                 <th>Ações</th>
               </tr>
             </thead>
@@ -420,6 +530,15 @@ export default function AdminPage() {
                 const normalizedUsername = user.username.toLowerCase();
                 const isPrimary = normalizedUsername === "alisson";
                 const isCommercialSector = normalizedUsername === "comercial";
+                const stats = userStats.get(user.id) || {
+                  total: 0,
+                  imported: 0,
+                  evo: 0,
+                  opportunities: 0,
+                  delinquents: 0,
+                  converted: 0,
+                  newestLeadAt: null
+                };
 
                 return (
                   <tr key={user.id}>
@@ -427,17 +546,49 @@ export default function AdminPage() {
                       <strong>{user.display_name}</strong>
                       <small>@{user.username}</small>
                     </td>
-                    <td>{user.role === "admin" ? "Administrador" : user.role === "commercial" ? "Setor Comercial" : "Usuário"}</td>
-                    <td>{unit ? `${unit.name} · ${unit.city}` : "Todas"}</td>
+                    <td>
+                      <strong>
+                        {user.role === "admin"
+                          ? "Administrador"
+                          : user.role === "commercial"
+                            ? "Setor Comercial"
+                            : "Usuário"}
+                      </strong>
+                      <small>
+                        {unit ? `${unit.name} · ${unit.city}` : "Todas as unidades"}
+                      </small>
+                    </td>
                     <td>
                       <span className={user.active ? "status-pill active" : "status-pill inactive"}>
                         {user.active ? "Ativo" : "Inativo"}
                       </span>
                     </td>
-                    <td>
-                      {user.last_login_at
-                        ? new Date(user.last_login_at).toLocaleString("pt-BR")
-                        : "Nunca"}
+                    <td className="admin-access-cell">
+                      <strong>
+                        {user.last_login_at
+                          ? new Date(user.last_login_at).toLocaleString("pt-BR")
+                          : "Nunca acessou"}
+                      </strong>
+                      <small>
+                        Criado em {new Date(user.created_at).toLocaleDateString("pt-BR")}
+                      </small>
+                    </td>
+                    <td className="admin-stat-cell">
+                      <strong>{stats.total}</strong>
+                      <small>
+                        {stats.imported} importados · {stats.evo} EVO
+                      </small>
+                      {stats.newestLeadAt && (
+                        <small>
+                          Última entrada: {new Date(stats.newestLeadAt).toLocaleString("pt-BR")}
+                        </small>
+                      )}
+                    </td>
+                    <td className="admin-stat-cell">
+                      <strong>{stats.opportunities} oportunidades</strong>
+                      <small>
+                        {stats.delinquents} inadimplentes · {stats.converted} convertidos
+                      </small>
                     </td>
                     <td>
                       <div className="row-actions">
@@ -469,7 +620,7 @@ export default function AdminPage() {
 
               {!loading && !users.length && (
                 <tr>
-                  <td colSpan={6} className="empty">
+                  <td colSpan={7} className="empty">
                     Nenhum usuário cadastrado.
                   </td>
                 </tr>
