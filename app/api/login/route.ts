@@ -86,10 +86,27 @@ export async function POST(request: Request) {
       unitName: null
     };
 
+    const accessToken = deriveCommercialAccess(username, password);
+
+    try {
+      await fetch(`${SUPABASE_URL}/rest/v1/rpc/commercial_touch_last_login`, {
+        method: "POST",
+        headers: {
+          apikey: SUPABASE_KEY,
+          "x-client-info": accessToken,
+          "Content-Type": "application/json"
+        },
+        body: "{}",
+        cache: "no-store"
+      });
+    } catch (error) {
+      console.error("[Leads Comercial] Não foi possível registrar o último acesso do Setor Comercial:", error);
+    }
+
     const token = await createSession(session);
     const response = NextResponse.json({
       ok: true,
-      accessToken: deriveCommercialAccess(username, password),
+      accessToken,
       role: session.role,
       displayName: session.displayName,
       unitName: session.unitName
