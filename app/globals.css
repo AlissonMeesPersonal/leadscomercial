@@ -613,6 +613,10 @@ html[data-theme="light"] .mail-btn {
   max-width: 1320px;
 }
 
+.admin-metrics {
+  margin: 8px 0 18px;
+}
+
 .admin-grid {
   display: grid;
   grid-template-columns: minmax(0, .85fr) minmax(0, 1.15fr);
@@ -718,7 +722,23 @@ html[data-theme="light"] .mail-btn {
 }
 
 .admin-table {
-  min-width: 980px;
+  min-width: 1280px;
+}
+
+.admin-access-cell {
+  min-width: 220px;
+}
+
+.admin-stat-cell {
+  min-width: 180px;
+}
+
+.admin-stat-cell strong {
+  font-size: 15px;
+}
+
+.admin-stat-cell small + small {
+  margin-top: 3px;
 }
 
 .compact-action {
