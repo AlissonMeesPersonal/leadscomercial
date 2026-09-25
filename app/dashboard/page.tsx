@@ -294,6 +294,18 @@ function inferCityFromSource(origem: string) {
   return "";
 }
 
+function localDateKey(value: string) {
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) return "";
+
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
 function inferDemandTypeFromSource(origem: string): DemandType {
   const normalized = normalizeHeader(origem);
 
@@ -373,6 +385,7 @@ export default function DashboardPage() {
   const [loaded, setLoaded] = useState(false);
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("Todos");
+  const [dateFilter, setDateFilter] = useState("");
   const [unitFilter, setUnitFilter] = useState("Todas");
   const [ownerFilter, setOwnerFilter] = useState("Todos");
   const [sortOrder, setSortOrder] = useState<"recent" | "az" | "za">("recent");
@@ -525,18 +538,26 @@ export default function DashboardPage() {
     });
   }, [tabLeads, unitFilter, unitById]);
 
+  const dateScopedLeads = useMemo(() => {
+    if (!dateFilter) return unitScopedLeads;
+
+    return unitScopedLeads.filter(
+      (lead) => localDateKey(lead.criadoEm) === dateFilter
+    );
+  }, [unitScopedLeads, dateFilter]);
+
   const ownerOptions = useMemo(() => {
     const used = new Set(
-      unitScopedLeads.map((lead) => lead.ownerUserId).filter(Boolean)
+      dateScopedLeads.map((lead) => lead.ownerUserId).filter(Boolean)
     );
 
     return owners.filter((owner) => used.has(owner.id));
-  }, [unitScopedLeads, owners]);
+  }, [dateScopedLeads, owners]);
 
   const filtered = useMemo(() => {
     const q = query.toLowerCase();
 
-    const result = unitScopedLeads.filter((lead) => {
+    const result = dateScopedLeads.filter((lead) => {
       const ownerName = lead.ownerUserId
         ? ownerById.get(lead.ownerUserId)?.display_name || ""
         : "";
@@ -575,7 +596,7 @@ export default function DashboardPage() {
 
       return new Date(b.criadoEm).getTime() - new Date(a.criadoEm).getTime();
     });
-  }, [unitScopedLeads, query, statusFilter, ownerFilter, ownerById, sortOrder]);
+  }, [dateScopedLeads, query, statusFilter, ownerFilter, ownerById, sortOrder]);
 
   async function addImported(items: Lead[]) {
     const currentScopeOwner = currentOwnerId;
@@ -966,20 +987,27 @@ export default function DashboardPage() {
   }
 
   const allUnitScopedLeads = useMemo(() => {
-    if (unitFilter === "Todas") return leads;
+    const unitScoped =
+      unitFilter === "Todas"
+        ? leads
+        : leads.filter((lead) => {
+            const selectedUnit = unitById.get(unitFilter);
 
-    const selectedUnit = unitById.get(unitFilter);
+            if (lead.unitId) return lead.unitId === unitFilter;
 
-    return leads.filter((lead) => {
-      if (lead.unitId) return lead.unitId === unitFilter;
+            return Boolean(
+              selectedUnit &&
+                lead.cidade &&
+                normalizeHeader(lead.cidade) === normalizeHeader(selectedUnit.city)
+            );
+          });
 
-      return Boolean(
-        selectedUnit &&
-          lead.cidade &&
-          normalizeHeader(lead.cidade) === normalizeHeader(selectedUnit.city)
-      );
-    });
-  }, [leads, unitFilter, unitById]);
+    if (!dateFilter) return unitScoped;
+
+    return unitScoped.filter(
+      (lead) => localDateKey(lead.criadoEm) === dateFilter
+    );
+  }, [leads, unitFilter, unitById, dateFilter]);
 
   const opportunityCount = allUnitScopedLeads.filter(
     (lead) => lead.tipo === "opportunity"
@@ -987,7 +1015,7 @@ export default function DashboardPage() {
   const delinquentCount = allUnitScopedLeads.filter(
     (lead) => lead.tipo === "delinquent"
   ).length;
-  const activeConverted = unitScopedLeads.filter(
+  const activeConverted = dateScopedLeads.filter(
     (lead) => lead.status === "Convertido"
   ).length;
 
@@ -1077,15 +1105,15 @@ export default function DashboardPage() {
       <section className="metrics">
         <article>
           <span>Total em {activeTab === "delinquent" ? "inadimplentes" : "oportunidades"}</span>
-          <strong>{unitScopedLeads.length}</strong>
+          <strong>{dateScopedLeads.length}</strong>
         </article>
         <article>
           <span>Novos</span>
-          <strong>{tabLeads.filter((lead) => lead.status === "Novo").length}</strong>
+          <strong>{dateScopedLeads.filter((lead) => lead.status === "Novo").length}</strong>
         </article>
         <article>
           <span>Em contato</span>
-          <strong>{tabLeads.filter((lead) => lead.status === "Em contato").length}</strong>
+          <strong>{dateScopedLeads.filter((lead) => lead.status === "Em contato").length}</strong>
         </article>
         <article>
           <span>Convertidos</span>
@@ -1126,6 +1154,24 @@ export default function DashboardPage() {
 
       {notice && <div className="notice">{notice}</div>}
 
+      {dateFilter && (
+        <div className="date-filter-notice">
+          <span>
+            Exibindo somente leads de{" "}
+            <strong>
+              {new Date(`${dateFilter}T12:00:00`).toLocaleDateString("pt-BR")}
+            </strong>
+          </span>
+          <button
+            type="button"
+            className="ghost-btn"
+            onClick={() => setDateFilter("")}
+          >
+            Limpar data
+          </button>
+        </div>
+      )}
+
       <section className="leads-card">
         <div className="filters filters-demand">
           <input
@@ -1149,6 +1195,17 @@ export default function DashboardPage() {
               </option>
             ))}
           </select>
+
+          <input
+            type="date"
+            value={dateFilter}
+            onChange={(event) => {
+              setDateFilter(event.target.value);
+              setOwnerFilter("Todos");
+            }}
+            aria-label="Filtrar leads por data"
+            title="Filtrar leads por data"
+          />
 
           <select
             value={ownerFilter}
