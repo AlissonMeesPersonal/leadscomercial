@@ -8,6 +8,7 @@ function cleanLead(input = {}) {
     nome: String(input.nome || "").trim(),
     ddi: digits(input.ddi || "55"),
     phone: digits(input.phone || ""),
+    unidade: String(input.unidade || "").trim(),
     createdAt: Date.now()
   };
 }
