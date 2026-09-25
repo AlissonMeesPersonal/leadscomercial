@@ -15,7 +15,7 @@ Depois:
 1. Entre no Leads Comercial.
 2. Clique em **Iniciar no Scale** no lead.
 3. O Scale abrirá.
-4. O conector abre **Chat Unidades**, seleciona **Santa Cruz**, abre **Nova Conversa** e preenche Nome, Brasil +55 e telefone.
+4. O conector abre **Chat Unidades**, seleciona automaticamente a **unidade vinculada ao lead** (ex.: Rio Grande, Santa Cruz do Sul, Blumenau), abre **Nova Conversa** e preenche Nome, Brasil +55 e telefone.
 5. Quando os dados estiverem válidos, ele avança em **Continuar** automaticamente.
 
 ### Atualização 2.1.0
@@ -24,3 +24,10 @@ Depois:
 - Adiciona um clique de reforço por coordenada quando a interface do Scale interceptar o primeiro clique.
 
 Depois de atualizar os arquivos, abra `chrome://extensions` e clique em **Recarregar** na extensão antes de testar novamente.
+
+
+### Atualização 2.6.0
+- Remove a unidade fixa de Santa Cruz.
+- O Leads Comercial envia a unidade junto com nome e telefone.
+- O conector seleciona automaticamente Rio Grande, Santa Cruz do Sul ou outra unidade vinculada ao lead.
+- Para aplicar em um computador que já possui a extensão: abra `chrome://extensions`, clique em **Recarregar** e depois atualize as abas do Leads Comercial e do Scale.
