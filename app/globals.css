@@ -416,7 +416,7 @@ html[data-theme="light"] .import-box {
 
 .demand-tabs {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
   margin: 4px 0 18px;
 }
@@ -480,8 +480,42 @@ html[data-theme="light"] .demand-tab.opportunity.active strong {
   color: var(--danger);
 }
 
+.demand-tab.inactive.active {
+  border-color: rgba(92, 144, 255, .5);
+  background: rgba(75, 126, 255, .13);
+}
+
+.demand-tab.inactive.active strong {
+  background: rgba(75, 126, 255, .18);
+  color: #84a7ff;
+}
+
 .import-box.delinquent-box {
   border-color: rgba(232, 78, 78, .3);
+}
+
+.import-box.inactive-box {
+  border-color: rgba(75, 126, 255, .34);
+}
+
+.inactive-import-btn {
+  border: 1px solid rgba(75, 126, 255, .42);
+  background: rgba(75, 126, 255, .13);
+  color: #91afff;
+  border-radius: 10px;
+  padding: 11px 14px;
+  font-weight: 900;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.inactive-import-btn:hover {
+  background: rgba(75, 126, 255, .2);
+  transform: translateY(-1px);
+}
+
+html[data-theme="light"] .inactive-import-btn {
+  color: #315ca8;
 }
 
 .import-actions {
@@ -957,7 +991,8 @@ html[data-theme="light"] .mail-btn {
   }
   .topbar-actions .primary-btn,
   .topbar-actions .ghost-btn,
-  .topbar-actions .delinquent-import-btn {
+  .topbar-actions .delinquent-import-btn,
+  .topbar-actions .inactive-import-btn {
     flex: 1;
   }
   .metrics,
@@ -1002,7 +1037,7 @@ html[data-theme="light"] .mail-btn {
     grid-template-columns: 1fr;
   }
   .demand-tabs {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
   .admin-grid {
     grid-template-columns: 1fr;
