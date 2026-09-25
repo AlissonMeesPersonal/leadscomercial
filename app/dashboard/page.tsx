@@ -1569,16 +1569,18 @@ export default function DashboardPage() {
       )}
 
       <section className={activeTab === "delinquent" ? "import-box delinquent-box" : "import-box"}>
-        <div>
-          <div className="live-status">
-            <span className="live-dot" aria-hidden="true" />
-            Atualização automática ativa
+        <div className="import-box-content">
+          <div className="import-heading">
+            <div className="live-status">
+              <span className="live-dot" aria-hidden="true" />
+              Atualização automática ativa
+            </div>
+            <strong>
+              {activeTab === "delinquent"
+                ? "Importar inadimplentes"
+                : "Importar oportunidades"}
+            </strong>
           </div>
-          <strong>
-            {activeTab === "delinquent"
-              ? "Importar inadimplentes"
-              : "Importar oportunidades"}
-          </strong>
           <p>
             {activeTab === "delinquent"
               ? "Cada importação cria ou atualiza a carteira diária de inadimplentes, preservando saldo inicial, pagamentos e recuperação daquela data."
