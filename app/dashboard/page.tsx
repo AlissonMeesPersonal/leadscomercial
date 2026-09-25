@@ -1753,7 +1753,11 @@ export default function DashboardPage() {
           >
             <option>Todos</option>
             {statusList.map((status) => (
-              <option key={status}>{status}</option>
+              <option key={status} value={status}>
+                {activeTab === "inactive" && status === "Convertido"
+                  ? "Reativado"
+                  : status}
+              </option>
             ))}
           </select>
 
