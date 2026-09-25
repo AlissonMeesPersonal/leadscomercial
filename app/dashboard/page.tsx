@@ -20,6 +20,7 @@ type Lead = {
   ownerUserId: string | null;
   unitId: string | null;
   criadoEm: string;
+  debtBalance?: number;
 };
 
 type SessionInfo = {
@@ -48,6 +49,35 @@ type UnitInfo = {
   id: string;
   name: string;
   city: string;
+};
+
+type DelinquentBatch = {
+  id: string;
+  batch_date: string;
+  owner_user_id: string;
+  unit_id: string | null;
+  source: string;
+  created_at: string;
+};
+
+type DelinquentItem = {
+  id: string;
+  batch_id: string;
+  lead_id: string;
+  initial_balance: number;
+  recovered_amount: number;
+  payment_status: "pending" | "partial" | "paid";
+  created_at: string;
+};
+
+type DelinquentPaymentResult = {
+  ok: boolean;
+  itemId: string;
+  leadId: string;
+  recoveredAmount: number;
+  initialBalance: number;
+  openBalance: number;
+  paymentStatus: "partial" | "paid";
 };
 
 type OwnerUser = {
@@ -233,6 +263,93 @@ function extractPhoneFromRow(row: Record<string, unknown>) {
   return candidates[0]?.digits || "";
 }
 
+function parseCurrencyValue(value: unknown) {
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? Math.max(0, Math.round(value * 100) / 100) : 0;
+  }
+
+  let raw = String(value ?? "").trim();
+  if (!raw) return 0;
+
+  raw = raw.replace(/[^0-9,.-]/g, "");
+
+  const comma = raw.lastIndexOf(",");
+  const dot = raw.lastIndexOf(".");
+
+  if (comma >= 0 && dot >= 0) {
+    if (comma > dot) {
+      raw = raw.replace(/\./g, "").replace(",", ".");
+    } else {
+      raw = raw.replace(/,/g, "");
+    }
+  } else if (comma >= 0) {
+    raw = raw.replace(/\./g, "").replace(",", ".");
+  } else {
+    const parts = raw.split(".");
+    if (parts.length > 2) {
+      const decimal = parts.pop();
+      raw = parts.join("") + "." + decimal;
+    }
+  }
+
+  const number = Number(raw);
+  return Number.isFinite(number)
+    ? Math.max(0, Math.round(number * 100) / 100)
+    : 0;
+}
+
+function debtHeaderPriority(header: string) {
+  const key = normalizeHeader(header)
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (key.includes("saldo devedor")) return 140;
+  if (key.includes("saldo em aberto")) return 135;
+  if (key.includes("valor em aberto")) return 130;
+  if (key.includes("valor devido")) return 125;
+  if (key.includes("total devido")) return 120;
+  if (key.includes("debito") || key.includes("divida")) return 115;
+  if (key.includes("inadimpl") || key.includes("pendencia")) return 100;
+  if (key === "saldo" || key === "valor") return 60;
+
+  return 0;
+}
+
+function extractDebtBalanceFromRow(row: Record<string, unknown>) {
+  const candidate = Object.entries(row)
+    .map(([header, value]) => ({
+      score: debtHeaderPriority(header),
+      value
+    }))
+    .filter((item) => item.score > 0)
+    .sort((a, b) => b.score - a.score)[0];
+
+  return candidate ? parseCurrencyValue(candidate.value) : 0;
+}
+
+function formatCurrency(value: number) {
+  return value.toLocaleString("pt-BR", {
+    style: "currency",
+    currency: "BRL"
+  });
+}
+
+function todayLocalDateKey() {
+  const date = new Date();
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
+function paymentStatusLabel(status: DelinquentItem["payment_status"]) {
+  if (status === "paid") return "Quitado";
+  if (status === "partial") return "Pagamento parcial";
+  return "Pendente";
+}
+
 function sourceIdentity(origem: string) {
   const file = origem.split("•")[0]?.trim() || origem;
 
@@ -335,7 +452,8 @@ function rowsToLeads(rows: Record<string, unknown>[], origem: string): Lead[] {
       tipo: inferDemandTypeFromSource(origem),
       ownerUserId: null,
       unitId: null,
-      criadoEm: new Date().toISOString()
+      criadoEm: new Date().toISOString(),
+      debtBalance: extractDebtBalanceFromRow(row)
     }))
     .filter((lead) => lead.nome || lead.whatsapp || lead.email);
 }
@@ -370,7 +488,8 @@ function textToLeads(text: string, origem: string): Lead[] {
       tipo: inferDemandTypeFromSource(origem),
       ownerUserId: null,
       unitId: null,
-      criadoEm: new Date().toISOString()
+      criadoEm: new Date().toISOString(),
+      debtBalance: 0
     });
   }
 
@@ -382,6 +501,9 @@ export default function DashboardPage() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [owners, setOwners] = useState<OwnerUser[]>([]);
   const [units, setUnits] = useState<UnitInfo[]>([]);
+  const [delinquentBatches, setDelinquentBatches] = useState<DelinquentBatch[]>([]);
+  const [delinquentItems, setDelinquentItems] = useState<DelinquentItem[]>([]);
+  const [delinquentImportDate, setDelinquentImportDate] = useState(todayLocalDateKey());
   const [loaded, setLoaded] = useState(false);
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("Todos");
@@ -405,30 +527,51 @@ export default function DashboardPage() {
       }
 
       try {
-        const [sessionResponse, leadResponse, ownerResponse, unitResponse] =
-          await Promise.all([
-            fetch("/api/session", { cache: "no-store" }),
-            supabaseRequest(
-              "/rest/v1/commercial_leads?select=id,name,whatsapp,email,city,source,status,demand_type,owner_user_id,unit_id,created_at&order=created_at.desc"
-            ),
-            supabaseRequest(
-              "/rest/v1/commercial_users?select=id,username,display_name,role&active=eq.true&order=display_name.asc"
-            ),
-            supabaseRequest(
-              "/rest/v1/commercial_units?select=id,name,city&active=eq.true&order=name.asc"
-            )
-          ]);
+        const [
+          sessionResponse,
+          leadResponse,
+          ownerResponse,
+          unitResponse,
+          batchResponse,
+          delinquentItemResponse
+        ] = await Promise.all([
+          fetch("/api/session", { cache: "no-store" }),
+          supabaseRequest(
+            "/rest/v1/commercial_leads?select=id,name,whatsapp,email,city,source,status,demand_type,owner_user_id,unit_id,created_at&order=created_at.desc"
+          ),
+          supabaseRequest(
+            "/rest/v1/commercial_users?select=id,username,display_name,role&active=eq.true&order=display_name.asc"
+          ),
+          supabaseRequest(
+            "/rest/v1/commercial_units?select=id,name,city&active=eq.true&order=name.asc"
+          ),
+          supabaseRequest(
+            "/rest/v1/commercial_delinquent_batches?select=id,batch_date,owner_user_id,unit_id,source,created_at&order=batch_date.desc"
+          ),
+          supabaseRequest(
+            "/rest/v1/commercial_delinquent_items?select=id,batch_id,lead_id,initial_balance,recovered_amount,payment_status,created_at&order=created_at.desc"
+          )
+        ]);
 
         if (!sessionResponse.ok) {
           location.href = "/login";
           return;
         }
 
-        const [session, leadRows, ownerRows, unitRows] = await Promise.all([
+        const [
+          session,
+          leadRows,
+          ownerRows,
+          unitRows,
+          batchRows,
+          delinquentItemRows
+        ] = await Promise.all([
           sessionResponse.json() as Promise<SessionInfo>,
           leadResponse.json() as Promise<DbLead[]>,
           ownerResponse.json() as Promise<OwnerUser[]>,
-          unitResponse.json() as Promise<UnitInfo[]>
+          unitResponse.json() as Promise<UnitInfo[]>,
+          batchResponse.json() as Promise<DelinquentBatch[]>,
+          delinquentItemResponse.json() as Promise<DelinquentItem[]>
         ]);
 
         if (!cancelled) {
@@ -436,6 +579,14 @@ export default function DashboardPage() {
           setLeads(leadRows.map(dbToLead));
           setOwners(ownerRows);
           setUnits(unitRows);
+          setDelinquentBatches(batchRows);
+          setDelinquentItems(
+            delinquentItemRows.map((item) => ({
+              ...item,
+              initial_balance: Number(item.initial_balance || 0),
+              recovered_amount: Number(item.recovered_amount || 0)
+            }))
+          );
           setNotice("");
         }
       } catch (err) {
@@ -465,13 +616,34 @@ export default function DashboardPage() {
       refreshing = true;
 
       try {
-        const response = await supabaseRequest(
-          "/rest/v1/commercial_leads?select=id,name,whatsapp,email,city,source,status,demand_type,owner_user_id,unit_id,created_at&order=created_at.desc"
-        );
-        const rows = (await response.json()) as DbLead[];
+        const [leadResponse, batchResponse, delinquentItemResponse] = await Promise.all([
+          supabaseRequest(
+            "/rest/v1/commercial_leads?select=id,name,whatsapp,email,city,source,status,demand_type,owner_user_id,unit_id,created_at&order=created_at.desc"
+          ),
+          supabaseRequest(
+            "/rest/v1/commercial_delinquent_batches?select=id,batch_date,owner_user_id,unit_id,source,created_at&order=batch_date.desc"
+          ),
+          supabaseRequest(
+            "/rest/v1/commercial_delinquent_items?select=id,batch_id,lead_id,initial_balance,recovered_amount,payment_status,created_at&order=created_at.desc"
+          )
+        ]);
+
+        const [rows, batchRows, delinquentItemRows] = await Promise.all([
+          leadResponse.json() as Promise<DbLead[]>,
+          batchResponse.json() as Promise<DelinquentBatch[]>,
+          delinquentItemResponse.json() as Promise<DelinquentItem[]>
+        ]);
 
         if (!cancelled) {
           setLeads(rows.map(dbToLead));
+          setDelinquentBatches(batchRows);
+          setDelinquentItems(
+            delinquentItemRows.map((item) => ({
+              ...item,
+              initial_balance: Number(item.initial_balance || 0),
+              recovered_amount: Number(item.recovered_amount || 0)
+            }))
+          );
         }
       } catch {
         // A atualização automática é silenciosa; erros continuam visíveis
@@ -538,13 +710,28 @@ export default function DashboardPage() {
     });
   }, [tabLeads, unitFilter, unitById]);
 
+  const batchById = useMemo(
+    () => new Map(delinquentBatches.map((batch) => [batch.id, batch] as const)),
+    [delinquentBatches]
+  );
+
   const dateScopedLeads = useMemo(() => {
     if (!dateFilter) return unitScopedLeads;
+
+    if (activeTab === "delinquent") {
+      const leadIds = new Set(
+        delinquentItems
+          .filter((item) => batchById.get(item.batch_id)?.batch_date === dateFilter)
+          .map((item) => item.lead_id)
+      );
+
+      return unitScopedLeads.filter((lead) => leadIds.has(lead.id));
+    }
 
     return unitScopedLeads.filter(
       (lead) => localDateKey(lead.criadoEm) === dateFilter
     );
-  }, [unitScopedLeads, dateFilter]);
+  }, [unitScopedLeads, dateFilter, activeTab, delinquentItems, batchById]);
 
   const ownerOptions = useMemo(() => {
     const used = new Set(
@@ -553,6 +740,93 @@ export default function DashboardPage() {
 
     return owners.filter((owner) => used.has(owner.id));
   }, [dateScopedLeads, owners]);
+
+  const delinquentItemByLead = useMemo(() => {
+    const map = new Map<string, DelinquentItem>();
+    const allowedLeadIds = new Set(unitScopedLeads.map((lead) => lead.id));
+
+    for (const item of delinquentItems) {
+      if (!allowedLeadIds.has(item.lead_id)) continue;
+
+      const batch = batchById.get(item.batch_id);
+      if (!batch) continue;
+      if (dateFilter && batch.batch_date !== dateFilter) continue;
+
+      const current = map.get(item.lead_id);
+
+      if (!current) {
+        map.set(item.lead_id, item);
+        continue;
+      }
+
+      const currentBatchDate = batchById.get(current.batch_id)?.batch_date || "";
+      if (batch.batch_date > currentBatchDate) {
+        map.set(item.lead_id, item);
+      }
+    }
+
+    return map;
+  }, [delinquentItems, unitScopedLeads, batchById, dateFilter]);
+
+  const delinquentStats = useMemo(() => {
+    if (activeTab !== "delinquent") {
+      return {
+        total: 0,
+        initialBalance: 0,
+        paidContacts: 0,
+        recoveredAmount: 0,
+        openBalance: 0,
+        conversionRate: 0,
+        recoveryRate: 0,
+        fullyPaid: 0
+      };
+    }
+
+    const allowedLeadIds = new Set(
+      unitScopedLeads
+        .filter(
+          (lead) => ownerFilter === "Todos" || lead.ownerUserId === ownerFilter
+        )
+        .map((lead) => lead.id)
+    );
+
+    const items = delinquentItems.filter((item) => {
+      if (!allowedLeadIds.has(item.lead_id)) return false;
+      const batchDate = batchById.get(item.batch_id)?.batch_date;
+      return !dateFilter || batchDate === dateFilter;
+    });
+
+    const initialBalance = items.reduce(
+      (sum, item) => sum + Number(item.initial_balance || 0),
+      0
+    );
+    const recoveredAmount = items.reduce(
+      (sum, item) => sum + Number(item.recovered_amount || 0),
+      0
+    );
+    const paidContacts = items.filter(
+      (item) => Number(item.recovered_amount || 0) > 0
+    ).length;
+    const fullyPaid = items.filter((item) => item.payment_status === "paid").length;
+
+    return {
+      total: items.length,
+      initialBalance,
+      paidContacts,
+      recoveredAmount,
+      openBalance: Math.max(0, initialBalance - recoveredAmount),
+      conversionRate: items.length ? (paidContacts / items.length) * 100 : 0,
+      recoveryRate: initialBalance ? (recoveredAmount / initialBalance) * 100 : 0,
+      fullyPaid
+    };
+  }, [
+    activeTab,
+    unitScopedLeads,
+    ownerFilter,
+    delinquentItems,
+    batchById,
+    dateFilter
+  ]);
 
   const filtered = useMemo(() => {
     const q = query.toLowerCase();
@@ -598,7 +872,149 @@ export default function DashboardPage() {
     });
   }, [dateScopedLeads, query, statusFilter, ownerFilter, ownerById, sortOrder]);
 
+  async function reloadDelinquentTracking() {
+    const [leadResponse, batchResponse, delinquentItemResponse] = await Promise.all([
+      supabaseRequest(
+        "/rest/v1/commercial_leads?select=id,name,whatsapp,email,city,source,status,demand_type,owner_user_id,unit_id,created_at&order=created_at.desc"
+      ),
+      supabaseRequest(
+        "/rest/v1/commercial_delinquent_batches?select=id,batch_date,owner_user_id,unit_id,source,created_at&order=batch_date.desc"
+      ),
+      supabaseRequest(
+        "/rest/v1/commercial_delinquent_items?select=id,batch_id,lead_id,initial_balance,recovered_amount,payment_status,created_at&order=created_at.desc"
+      )
+    ]);
+
+    const [leadRows, batchRows, delinquentItemRows] = await Promise.all([
+      leadResponse.json() as Promise<DbLead[]>,
+      batchResponse.json() as Promise<DelinquentBatch[]>,
+      delinquentItemResponse.json() as Promise<DelinquentItem[]>
+    ]);
+
+    setLeads(leadRows.map(dbToLead));
+    setDelinquentBatches(batchRows);
+    setDelinquentItems(
+      delinquentItemRows.map((item) => ({
+        ...item,
+        initial_balance: Number(item.initial_balance || 0),
+        recovered_amount: Number(item.recovered_amount || 0)
+      }))
+    );
+  }
+
+  async function importDelinquentBatch(items: Lead[]) {
+    if (!delinquentImportDate) {
+      throw new Error("Selecione a data da carteira de inadimplentes.");
+    }
+
+    const source = items[0]?.origem?.split("•")[0]?.trim() || "Importação diária";
+
+    const response = await supabaseRequest(
+      "/rest/v1/rpc/commercial_import_delinquent_batch",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          p_batch_date: delinquentImportDate,
+          p_source: source,
+          p_items: items.map((lead) => ({
+            name: lead.nome.trim(),
+            whatsapp: lead.whatsapp.trim() || null,
+            email: lead.email.trim() || null,
+            city: lead.cidade.trim() || null,
+            source: lead.origem || source,
+            initial_balance: Number(lead.debtBalance || 0).toFixed(2)
+          }))
+        })
+      }
+    );
+
+    const result = (await response.json()) as {
+      ok: boolean;
+      batchId: string;
+      batchDate: string;
+      processed: number;
+      total: number;
+      initialBalance: number | string;
+    };
+
+    await reloadDelinquentTracking();
+    setDateFilter(delinquentImportDate);
+
+    setNotice(
+      `Carteira de ${new Date(`${delinquentImportDate}T12:00:00`).toLocaleDateString("pt-BR")} registrada: ${result.total} inadimplente(s) · saldo inicial ${formatCurrency(Number(result.initialBalance || 0))}.`
+    );
+  }
+
+  async function registerDelinquentPayment(lead: Lead, item: DelinquentItem) {
+    const openBalance = Math.max(
+      0,
+      Number(item.initial_balance || 0) - Number(item.recovered_amount || 0)
+    );
+
+    if (item.payment_status === "paid") {
+      setNotice(`${lead.nome || "Este contato"} já está quitado nesta carteira.`);
+      return;
+    }
+
+    const raw = window.prompt(
+      item.initial_balance > 0
+        ? `Valor recebido de ${lead.nome || "cliente"} (saldo aberto: ${formatCurrency(openBalance)}):`
+        : `Valor recebido de ${lead.nome || "cliente"}:`
+    );
+
+    if (raw == null) return;
+
+    const amount = parseCurrencyValue(raw);
+
+    if (!amount) {
+      setNotice("Informe um valor de pagamento válido.");
+      return;
+    }
+
+    try {
+      const response = await supabaseRequest(
+        "/rest/v1/rpc/commercial_register_delinquent_payment",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            p_item_id: item.id,
+            p_amount: amount,
+            p_paid_at: null,
+            p_note: null
+          })
+        }
+      );
+
+      const result = (await response.json()) as DelinquentPaymentResult;
+
+      setDelinquentItems((current) =>
+        current.map((row) =>
+          row.id === item.id
+            ? {
+                ...row,
+                recovered_amount: Number(result.recoveredAmount || 0),
+                payment_status: result.paymentStatus
+              }
+            : row
+        )
+      );
+
+      setNotice(
+        `Pagamento de ${formatCurrency(amount)} registrado para ${lead.nome || "cliente"}. Recuperado nesta carteira: ${formatCurrency(Number(result.recoveredAmount || 0))}.`
+      );
+    } catch (err) {
+      setNotice(
+        err instanceof Error ? err.message : "Não foi possível registrar o pagamento."
+      );
+    }
+  }
+
   async function addImported(items: Lead[]) {
+    if (items.length && items.every((item) => item.tipo === "delinquent")) {
+      await importDelinquentBatch(items);
+      return;
+    }
+
     const currentScopeOwner = currentOwnerId;
 
     const scopedExisting = leads.filter(
@@ -987,34 +1403,30 @@ export default function DashboardPage() {
   }
 
   const allUnitScopedLeads = useMemo(() => {
-    const unitScoped =
-      unitFilter === "Todas"
-        ? leads
-        : leads.filter((lead) => {
-            const selectedUnit = unitById.get(unitFilter);
+    return unitFilter === "Todas"
+      ? leads
+      : leads.filter((lead) => {
+          const selectedUnit = unitById.get(unitFilter);
 
-            if (lead.unitId) return lead.unitId === unitFilter;
+          if (lead.unitId) return lead.unitId === unitFilter;
 
-            return Boolean(
-              selectedUnit &&
-                lead.cidade &&
-                normalizeHeader(lead.cidade) === normalizeHeader(selectedUnit.city)
-            );
-          });
-
-    if (!dateFilter) return unitScoped;
-
-    return unitScoped.filter(
-      (lead) => localDateKey(lead.criadoEm) === dateFilter
-    );
-  }, [leads, unitFilter, unitById, dateFilter]);
+          return Boolean(
+            selectedUnit &&
+              lead.cidade &&
+              normalizeHeader(lead.cidade) === normalizeHeader(selectedUnit.city)
+          );
+        });
+  }, [leads, unitFilter, unitById]);
 
   const opportunityCount = allUnitScopedLeads.filter(
-    (lead) => lead.tipo === "opportunity"
+    (lead) =>
+      lead.tipo === "opportunity" &&
+      (!dateFilter || localDateKey(lead.criadoEm) === dateFilter)
   ).length;
-  const delinquentCount = allUnitScopedLeads.filter(
-    (lead) => lead.tipo === "delinquent"
-  ).length;
+
+  const delinquentCount = dateFilter
+    ? delinquentStats.total
+    : allUnitScopedLeads.filter((lead) => lead.tipo === "delinquent").length;
   const activeConverted = dateScopedLeads.filter(
     (lead) => lead.status === "Convertido"
   ).length;
@@ -1102,24 +1514,59 @@ export default function DashboardPage() {
         </button>
       </section>
 
-      <section className="metrics">
-        <article>
-          <span>Total em {activeTab === "delinquent" ? "inadimplentes" : "oportunidades"}</span>
-          <strong>{dateScopedLeads.length}</strong>
-        </article>
-        <article>
-          <span>Novos</span>
-          <strong>{dateScopedLeads.filter((lead) => lead.status === "Novo").length}</strong>
-        </article>
-        <article>
-          <span>Em contato</span>
-          <strong>{dateScopedLeads.filter((lead) => lead.status === "Em contato").length}</strong>
-        </article>
-        <article>
-          <span>Convertidos</span>
-          <strong>{activeConverted}</strong>
-        </article>
-      </section>
+      {activeTab === "delinquent" ? (
+        <section className="metrics metrics-six delinquent-recovery-metrics">
+          <article>
+            <span>Carteira {dateFilter ? "do dia" : "acumulada"}</span>
+            <strong>{delinquentStats.total}</strong>
+            <small>registros de inadimplência</small>
+          </article>
+          <article>
+            <span>Saldo inicial</span>
+            <strong>{formatCurrency(delinquentStats.initialBalance)}</strong>
+            <small>valor importado nas carteiras</small>
+          </article>
+          <article>
+            <span>Pagaram</span>
+            <strong>{delinquentStats.paidContacts}</strong>
+            <small>{delinquentStats.fullyPaid} quitado(s)</small>
+          </article>
+          <article>
+            <span>Valor recuperado</span>
+            <strong>{formatCurrency(delinquentStats.recoveredAmount)}</strong>
+            <small>{delinquentStats.recoveryRate.toFixed(1)}% do saldo</small>
+          </article>
+          <article>
+            <span>Conversão</span>
+            <strong>{delinquentStats.conversionRate.toFixed(1)}%</strong>
+            <small>contatos com pagamento</small>
+          </article>
+          <article>
+            <span>Saldo aberto</span>
+            <strong>{formatCurrency(delinquentStats.openBalance)}</strong>
+            <small>restante da carteira</small>
+          </article>
+        </section>
+      ) : (
+        <section className="metrics">
+          <article>
+            <span>Total em oportunidades</span>
+            <strong>{dateScopedLeads.length}</strong>
+          </article>
+          <article>
+            <span>Novos</span>
+            <strong>{dateScopedLeads.filter((lead) => lead.status === "Novo").length}</strong>
+          </article>
+          <article>
+            <span>Em contato</span>
+            <strong>{dateScopedLeads.filter((lead) => lead.status === "Em contato").length}</strong>
+          </article>
+          <article>
+            <span>Convertidos</span>
+            <strong>{activeConverted}</strong>
+          </article>
+        </section>
+      )}
 
       <section className={activeTab === "delinquent" ? "import-box delinquent-box" : "import-box"}>
         <div>
@@ -1134,12 +1581,23 @@ export default function DashboardPage() {
           </strong>
           <p>
             {activeTab === "delinquent"
-              ? "O arquivo enviado nesta aba entra somente em Inadimplentes e permanece vinculado ao usuário responsável."
+              ? "Cada importação cria ou atualiza a carteira diária de inadimplentes, preservando saldo inicial, pagamentos e recuperação daquela data."
               : "O arquivo enviado nesta aba entra somente em Oportunidades e permanece vinculado ao usuário responsável."}
           </p>
         </div>
 
         <div className="import-actions">
+          {activeTab === "delinquent" && (
+            <label className="batch-date-field">
+              Data da carteira
+              <input
+                type="date"
+                value={delinquentImportDate}
+                onChange={(event) => setDelinquentImportDate(event.target.value)}
+              />
+            </label>
+          )}
+
           <button
             className={activeTab === "delinquent" ? "delinquent-import-btn" : "primary-btn"}
             onClick={() => openImporter(activeTab)}
@@ -1157,7 +1615,7 @@ export default function DashboardPage() {
       {dateFilter && (
         <div className="date-filter-notice">
           <span>
-            Exibindo somente leads de{" "}
+            Exibindo somente {activeTab === "delinquent" ? "a carteira de" : "leads de"}{" "}
             <strong>
               {new Date(`${dateFilter}T12:00:00`).toLocaleDateString("pt-BR")}
             </strong>
@@ -1243,7 +1701,7 @@ export default function DashboardPage() {
         </div>
 
         <div className="table-wrap">
-          <table className="demand-table">
+          <table className={activeTab === "delinquent" ? "demand-table delinquent-finance-table" : "demand-table"}>
             <thead>
               <tr>
                 <th>Lead</th>
@@ -1251,6 +1709,13 @@ export default function DashboardPage() {
                 <th>Unidade</th>
                 <th>Responsável</th>
                 <th>Origem</th>
+                {activeTab === "delinquent" && (
+                  <>
+                    <th>Saldo devedor</th>
+                    <th>Recuperado</th>
+                    <th>Pagamento</th>
+                  </>
+                )}
                 <th>Status</th>
                 <th>Ações</th>
               </tr>
@@ -1262,6 +1727,10 @@ export default function DashboardPage() {
                 const owner = lead.ownerUserId
                   ? ownerById.get(lead.ownerUserId)
                   : null;
+                const delinquentItem =
+                  activeTab === "delinquent"
+                    ? delinquentItemByLead.get(lead.id) || null
+                    : null;
 
                 const text = encodeURIComponent(
                   `Olá, ${lead.nome || "tudo bem"}! Sou do setor comercial e estou entrando em contato para te passar mais informações.`
@@ -1296,6 +1765,31 @@ export default function DashboardPage() {
                       {owner?.username && <small>@{owner.username}</small>}
                     </td>
                     <td className="origin">{lead.origem}</td>
+                    {activeTab === "delinquent" && (
+                      <>
+                        <td className="money-cell">
+                          {delinquentItem
+                            ? formatCurrency(Number(delinquentItem.initial_balance || 0))
+                            : "—"}
+                        </td>
+                        <td className="money-cell recovered">
+                          {delinquentItem
+                            ? formatCurrency(Number(delinquentItem.recovered_amount || 0))
+                            : "—"}
+                        </td>
+                        <td>
+                          {delinquentItem ? (
+                            <span
+                              className={`payment-pill ${delinquentItem.payment_status}`}
+                            >
+                              {paymentStatusLabel(delinquentItem.payment_status)}
+                            </span>
+                          ) : (
+                            "—"
+                          )}
+                        </td>
+                      </>
+                    )}
                     <td>
                       <select
                         className="status-select"
@@ -1314,6 +1808,18 @@ export default function DashboardPage() {
                     </td>
                     <td>
                       <div className="row-actions">
+                        {activeTab === "delinquent" && delinquentItem && (
+                          <button
+                            className="payment-btn"
+                            type="button"
+                            onClick={() =>
+                              void registerDelinquentPayment(lead, delinquentItem)
+                            }
+                          >
+                            Registrar pagamento
+                          </button>
+                        )}
+
                         {wa && (
                           <button
                             className="scale-btn"
@@ -1354,7 +1860,7 @@ export default function DashboardPage() {
 
               {!filtered.length && (
                 <tr>
-                  <td colSpan={7} className="empty">
+                  <td colSpan={activeTab === "delinquent" ? 10 : 7} className="empty">
                     Nenhum {activeTab === "delinquent" ? "inadimplente" : "registro de oportunidade"} encontrado nesta carteira.
                   </td>
                 </tr>
@@ -1365,7 +1871,7 @@ export default function DashboardPage() {
       </section>
 
       <p className="footer-note">
-        Cada usuário trabalha sua própria carteira. Setor Comercial e ADM mantêm a visão consolidada sem perda de dados.
+        Oportunidades e inadimplentes permanecem separados. As carteiras de inadimplência guardam histórico diário de saldo, pagamentos e recuperação.
       </p>
     </main>
   );
