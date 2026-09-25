@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Leads Comercial → Scale",
-  "version": "2.5.0",
-  "description": "Preenche diretamente os campos Nome e Telefone do modal Nova Conversa do Scale usando os placeholders reais.",
+  "version": "2.6.0",
+  "description": "Seleciona automaticamente a unidade do lead no Scale e preenche Nome e Telefone no modal Nova Conversa.",
   "permissions": [
     "storage",
     "tabs",
