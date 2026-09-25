@@ -243,9 +243,11 @@ input:focus, select:focus {
 }
 
 .dashboard-shell {
-  max-width: 1500px;
+  width: min(1760px, 100%);
+  max-width: 1760px;
   margin: 0 auto;
   padding: 28px;
+  overflow-x: clip;
 }
 
 .topbar {
@@ -315,10 +317,27 @@ input:focus, select:focus {
   border: 1px solid #2d323b;
   border-radius: 18px;
   padding: 22px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 24px;
+}
+
+.import-box-content {
+  min-width: 0;
+}
+
+.import-heading {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 20px;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.import-heading strong {
+  display: block;
+  font-size: 17px;
+  line-height: 1.25;
 }
 
 html[data-theme="light"] .import-box {
@@ -336,10 +355,11 @@ html[data-theme="light"] .import-box {
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  margin-bottom: 9px;
+  margin: 0;
   color: #b7bbc4;
   font-size: 12px;
   font-weight: 800;
+  white-space: nowrap;
 }
 
 .live-dot {
@@ -367,7 +387,8 @@ html[data-theme="light"] .import-box {
 }
 
 .filters.filters-demand {
-  grid-template-columns: minmax(250px, 1fr) repeat(5, minmax(145px, 190px));
+  grid-template-columns: minmax(280px, 1.5fr) repeat(5, minmax(150px, 1fr));
+  gap: 10px;
 }
 
 .date-filter-notice {
@@ -465,9 +486,11 @@ html[data-theme="light"] .demand-tab.opportunity.active strong {
 
 .import-actions {
   display: flex;
-  align-items: center;
-  gap: 10px;
+  align-items: flex-end;
+  justify-content: flex-end;
+  gap: 12px;
   flex-wrap: wrap;
+  min-width: 0;
 }
 
 .batch-date-field {
@@ -507,11 +530,18 @@ html[data-theme="light"] .import-actions select {
 }
 
 .demand-table {
-  min-width: 1320px;
+  width: 100%;
+  min-width: 1240px;
+  table-layout: auto;
 }
 
 .delinquent-finance-table {
-  min-width: 1720px;
+  min-width: 1460px;
+}
+
+.delinquent-finance-table th:last-child,
+.delinquent-finance-table td:last-child {
+  min-width: 270px;
 }
 
 .money-cell {
@@ -600,7 +630,13 @@ html[data-theme="light"] .demand-pill.opportunity {
 }
 
 .table-wrap {
+  width: 100%;
+  max-width: 100%;
   overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-gutter: stable;
+  padding-bottom: 6px;
 }
 
 table {
@@ -656,6 +692,12 @@ td small {
   display: flex;
   gap: 7px;
   align-items: center;
+  flex-wrap: wrap;
+  min-width: 240px;
+}
+
+.row-actions > * {
+  flex: 0 0 auto;
 }
 
 .row-actions a, .row-actions button {
@@ -862,6 +904,45 @@ html[data-theme="light"] .mail-btn {
   font-size: 12px;
 }
 
+@media (max-width: 1600px) {
+  .dashboard-shell {
+    max-width: 100%;
+    padding-inline: 22px;
+  }
+
+  .metrics.metrics-six {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .filters.filters-demand {
+    grid-template-columns: minmax(260px, 1.4fr) repeat(2, minmax(170px, 1fr));
+  }
+
+  .delinquent-finance-table {
+    min-width: 1420px;
+  }
+}
+
+@media (max-width: 1180px) {
+  .import-box {
+    grid-template-columns: 1fr;
+    align-items: start;
+  }
+
+  .import-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .filters.filters-demand {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .filters.filters-demand > :first-child {
+    grid-column: 1 / -1;
+  }
+}
+
 @media (max-width: 850px) {
   .dashboard-shell { padding: 18px; }
   .topbar {
@@ -885,11 +966,33 @@ html[data-theme="light"] .mail-btn {
     grid-template-columns: repeat(2, 1fr);
   }
   .import-box {
+    grid-template-columns: 1fr;
     align-items: flex-start;
-    flex-direction: column;
+    padding: 18px;
   }
   .import-actions {
     width: 100%;
+    justify-content: stretch;
+  }
+  .batch-date-field {
+    width: 100%;
+  }
+  .batch-date-field input,
+  .import-actions .delinquent-import-btn,
+  .import-actions .primary-btn {
+    width: 100%;
+  }
+  .filters.filters-demand {
+    grid-template-columns: 1fr;
+  }
+  .filters.filters-demand > :first-child {
+    grid-column: auto;
+  }
+  .table-wrap {
+    margin-inline: 0;
+  }
+  .delinquent-finance-table {
+    min-width: 1320px;
   }
   .import-actions select,
   .import-actions .secondary-btn {
