@@ -351,7 +351,30 @@ html[data-theme="light"] .import-box {
 }
 
 .filters.filters-demand {
-  grid-template-columns: minmax(250px, 1fr) repeat(4, minmax(145px, 190px));
+  grid-template-columns: minmax(250px, 1fr) repeat(5, minmax(145px, 190px));
+}
+
+.date-filter-notice {
+  margin: 16px 0 0;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--card);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.date-filter-notice strong {
+  color: var(--text);
+}
+
+.date-filter-notice .ghost-btn {
+  padding: 8px 12px;
+  min-height: 36px;
 }
 
 .demand-tabs {
