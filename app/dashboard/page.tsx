@@ -1323,7 +1323,16 @@ export default function DashboardPage() {
   async function startScale(lead: Lead) {
     const full = normalizeWhatsApp(lead.whatsapp);
     const phone = full.startsWith("55") ? full.slice(2) : full;
-    const payload = { nome: lead.nome, ddi: "55", phone };
+    const payload = {
+      nome: lead.nome,
+      ddi: "55",
+      phone,
+      unidade:
+        (lead.unitId ? unitById.get(lead.unitId)?.name : null) ||
+        lead.cidade ||
+        sessionInfo?.unitName ||
+        ""
+    };
 
     try {
       await navigator.clipboard.writeText(
