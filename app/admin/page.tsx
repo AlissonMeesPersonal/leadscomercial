@@ -28,7 +28,7 @@ type CommercialUser = {
 
 type LeadActivity = {
   owner_user_id: string | null;
-  demand_type: "opportunity" | "delinquent";
+  demand_type: "opportunity" | "delinquent" | "inactive";
   status: "Novo" | "Em contato" | "Interessado" | "Sem retorno" | "Convertido";
   source: string;
   created_at: string;
@@ -40,6 +40,7 @@ type UserLeadStats = {
   evo: number;
   opportunities: number;
   delinquents: number;
+  inactives: number;
   converted: number;
   newestLeadAt: string | null;
 };
@@ -116,6 +117,7 @@ export default function AdminPage() {
         evo: 0,
         opportunities: 0,
         delinquents: 0,
+        inactives: 0,
         converted: 0,
         newestLeadAt: null
       });
@@ -137,8 +139,10 @@ export default function AdminPage() {
 
       if (lead.demand_type === "opportunity") {
         current.opportunities += 1;
-      } else {
+      } else if (lead.demand_type === "delinquent") {
         current.delinquents += 1;
+      } else {
+        current.inactives += 1;
       }
 
       if (lead.status === "Convertido") {
@@ -595,8 +599,9 @@ export default function AdminPage() {
                     <td className="admin-stat-cell">
                       <strong>{stats.opportunities} oportunidades</strong>
                       <small>
-                        {stats.delinquents} inadimplentes · {stats.converted} convertidos
+                        {stats.delinquents} inadimplentes · {stats.inactives} inativos
                       </small>
+                      <small>{stats.converted} convertidos/reativados</small>
                     </td>
                     <td>
                       <div className="row-actions">
