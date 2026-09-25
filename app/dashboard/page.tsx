@@ -6,7 +6,7 @@ import mammoth from "mammoth";
 import ThemeToggle from "../components/ThemeToggle";
 
 type Status = "Novo" | "Em contato" | "Interessado" | "Sem retorno" | "Convertido";
-type DemandType = "opportunity" | "delinquent";
+type DemandType = "opportunity" | "delinquent" | "inactive";
 
 type Lead = {
   id: string;
@@ -152,7 +152,9 @@ function toDbLead(lead: Lead) {
 }
 
 function demandLabel(type: DemandType) {
-  return type === "delinquent" ? "Inadimplente" : "Oportunidade";
+  if (type === "delinquent") return "Inadimplente";
+  if (type === "inactive") return "Inativo";
+  return "Oportunidade";
 }
 
 async function supabaseRequest(path: string, init: RequestInit = {}) {
@@ -400,6 +402,9 @@ function inferCityFromSource(origem: string) {
   const delinquent = normalized.match(/^inadimplentes?\s+(?:de\s+)?(.+)$/);
   if (delinquent?.[1]) return cityTitleCase(delinquent[1]);
 
+  const inactive = normalized.match(/^inativos?\s+(?:de\s+)?(.+)$/);
+  if (inactive?.[1]) return cityTitleCase(inactive[1]);
+
   const leads = normalized.match(/^leads?\s+(?:de\s+)?(.+)$/);
   if (leads?.[1]) return cityTitleCase(leads[1]);
 
@@ -432,6 +437,15 @@ function inferDemandTypeFromSource(origem: string): DemandType {
     normalized.includes("devedor")
   ) {
     return "delinquent";
+  }
+
+  if (
+    normalized.includes("inativo") ||
+    normalized.includes("ex aluno") ||
+    normalized.includes("ex-aluno") ||
+    normalized.includes("reativ")
+  ) {
+    return "inactive";
   }
 
   return "opportunity";
@@ -1433,6 +1447,12 @@ export default function DashboardPage() {
       (!dateFilter || localDateKey(lead.criadoEm) === dateFilter)
   ).length;
 
+  const inactiveCount = allUnitScopedLeads.filter(
+    (lead) =>
+      lead.tipo === "inactive" &&
+      (!dateFilter || localDateKey(lead.criadoEm) === dateFilter)
+  ).length;
+
   const delinquentCount = dateFilter
     ? delinquentStats.total
     : allUnitScopedLeads.filter((lead) => lead.tipo === "delinquent").length;
@@ -1486,7 +1506,13 @@ export default function DashboardPage() {
           />
 
           <button
-            className={activeTab === "delinquent" ? "delinquent-import-btn" : "primary-btn small"}
+            className={
+              activeTab === "delinquent"
+                ? "delinquent-import-btn"
+                : activeTab === "inactive"
+                  ? "inactive-import-btn"
+                  : "primary-btn small"
+            }
             onClick={() => openImporter(activeTab)}
             disabled={processing || !loaded}
           >
@@ -1494,7 +1520,9 @@ export default function DashboardPage() {
               ? "Importando..."
               : activeTab === "delinquent"
                 ? "+ Importar inadimplentes"
-                : "+ Importar oportunidades"}
+                : activeTab === "inactive"
+                  ? "+ Importar inativos"
+                  : "+ Importar oportunidades"}
           </button>
 
           <button className="ghost-btn" onClick={logout}>
@@ -1520,6 +1548,15 @@ export default function DashboardPage() {
         >
           <span>Inadimplentes</span>
           <strong>{delinquentCount}</strong>
+        </button>
+
+        <button
+          type="button"
+          className={activeTab === "inactive" ? "demand-tab active inactive" : "demand-tab inactive"}
+          onClick={() => changeTab("inactive")}
+        >
+          <span>Inativos</span>
+          <strong>{inactiveCount}</strong>
         </button>
       </section>
 
@@ -1559,7 +1596,9 @@ export default function DashboardPage() {
       ) : (
         <section className="metrics">
           <article>
-            <span>Total em oportunidades</span>
+            <span>
+              Total em {activeTab === "inactive" ? "inativos" : "oportunidades"}
+            </span>
             <strong>{dateScopedLeads.length}</strong>
           </article>
           <article>
@@ -1571,13 +1610,21 @@ export default function DashboardPage() {
             <strong>{dateScopedLeads.filter((lead) => lead.status === "Em contato").length}</strong>
           </article>
           <article>
-            <span>Convertidos</span>
+            <span>{activeTab === "inactive" ? "Reativados" : "Convertidos"}</span>
             <strong>{activeConverted}</strong>
           </article>
         </section>
       )}
 
-      <section className={activeTab === "delinquent" ? "import-box delinquent-box" : "import-box"}>
+      <section
+        className={
+          activeTab === "delinquent"
+            ? "import-box delinquent-box"
+            : activeTab === "inactive"
+              ? "import-box inactive-box"
+              : "import-box"
+        }
+      >
         <div className="import-box-content">
           <div className="import-heading">
             <div className="live-status">
@@ -1587,13 +1634,17 @@ export default function DashboardPage() {
             <strong>
               {activeTab === "delinquent"
                 ? "Importar inadimplentes"
-                : "Importar oportunidades"}
+                : activeTab === "inactive"
+                  ? "Importar alunos inativos"
+                  : "Importar oportunidades"}
             </strong>
           </div>
           <p>
             {activeTab === "delinquent"
               ? "Cada importação cria ou atualiza a carteira diária de inadimplentes, preservando saldo inicial, pagamentos e recuperação daquela data."
-              : "O arquivo enviado nesta aba entra somente em Oportunidades e permanece vinculado ao usuário responsável."}
+              : activeTab === "inactive"
+                ? "Importe alunos inativos para trabalhar a reativação sem misturar essa carteira com oportunidades ou inadimplentes."
+                : "O arquivo enviado nesta aba entra somente em Oportunidades e permanece vinculado ao usuário responsável."}
           </p>
         </div>
 
@@ -1610,13 +1661,21 @@ export default function DashboardPage() {
           )}
 
           <button
-            className={activeTab === "delinquent" ? "delinquent-import-btn" : "primary-btn"}
+            className={
+              activeTab === "delinquent"
+                ? "delinquent-import-btn"
+                : activeTab === "inactive"
+                  ? "inactive-import-btn"
+                  : "primary-btn"
+            }
             onClick={() => openImporter(activeTab)}
             disabled={processing || !loaded}
           >
             {activeTab === "delinquent"
               ? "Selecionar inadimplentes"
-              : "Selecionar oportunidades"}
+              : activeTab === "inactive"
+                ? "Selecionar inativos"
+                : "Selecionar oportunidades"}
           </button>
         </div>
       </section>
@@ -1626,7 +1685,7 @@ export default function DashboardPage() {
       {dateFilter && (
         <div className="date-filter-notice">
           <span>
-            Exibindo somente {activeTab === "delinquent" ? "a carteira de" : "leads de"}{" "}
+            Exibindo somente {activeTab === "delinquent" ? "a carteira de" : activeTab === "inactive" ? "inativos de" : "leads de"}{" "}
             <strong>
               {new Date(`${dateFilter}T12:00:00`).toLocaleDateString("pt-BR")}
             </strong>
@@ -1744,7 +1803,9 @@ export default function DashboardPage() {
                     : null;
 
                 const text = encodeURIComponent(
-                  `Olá, ${lead.nome || "tudo bem"}! Sou do setor comercial e estou entrando em contato para te passar mais informações.`
+                  activeTab === "inactive"
+                    ? `Olá, ${lead.nome || "tudo bem"}! Tudo bem? Sou da 26Fit e estou entrando em contato porque vimos que você está há um tempo sem treinar com a gente. Posso te contar as opções para voltar?`
+                    : `Olá, ${lead.nome || "tudo bem"}! Sou do setor comercial e estou entrando em contato para te passar mais informações.`
                 );
 
                 return (
@@ -1813,7 +1874,11 @@ export default function DashboardPage() {
                         }
                       >
                         {statusList.map((status) => (
-                          <option key={status}>{status}</option>
+                          <option key={status} value={status}>
+                            {activeTab === "inactive" && status === "Convertido"
+                              ? "Reativado"
+                              : status}
+                          </option>
                         ))}
                       </select>
                     </td>
@@ -1872,7 +1937,7 @@ export default function DashboardPage() {
               {!filtered.length && (
                 <tr>
                   <td colSpan={activeTab === "delinquent" ? 10 : 7} className="empty">
-                    Nenhum {activeTab === "delinquent" ? "inadimplente" : "registro de oportunidade"} encontrado nesta carteira.
+                    Nenhum {activeTab === "delinquent" ? "inadimplente" : activeTab === "inactive" ? "aluno inativo" : "registro de oportunidade"} encontrado nesta carteira.
                   </td>
                 </tr>
               )}
@@ -1882,7 +1947,7 @@ export default function DashboardPage() {
       </section>
 
       <p className="footer-note">
-        Oportunidades e inadimplentes permanecem separados. As carteiras de inadimplência guardam histórico diário de saldo, pagamentos e recuperação.
+        Oportunidades, inadimplentes e inativos permanecem em carteiras separadas. Inadimplentes mantêm o histórico financeiro diário e Inativos ficam focados em reativação.
       </p>
     </main>
   );
