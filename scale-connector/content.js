@@ -30,6 +30,7 @@
         nome: String(payload.nome || "").trim(),
         ddi: digits(payload.ddi || "55"),
         phone: digits(payload.phone || ""),
+        unidade: String(payload.unidade || "").trim(),
         createdAt: Date.now()
       };
 
@@ -117,6 +118,7 @@
       nome: String(inputLead?.nome || "").trim(),
       ddi: digits(inputLead?.ddi || "55"),
       phone: digits(inputLead?.phone || ""),
+      unidade: String(inputLead?.unidade || "").trim(),
       createdAt: Number(inputLead?.createdAt || Date.now())
     };
 
@@ -143,6 +145,7 @@
         nome: String(lead.nome || "").trim(),
         ddi: digits(lead.ddi || "55"),
         phone: digits(lead.phone || ""),
+        unidade: String(lead.unidade || "").trim(),
         createdAt: Date.now()
       }
     });
@@ -175,7 +178,7 @@
     let lastMessage = "";
     let sidebarClickedAt = 0;
     let chatUnidadesClickedAt = 0;
-    let santaCruzClickedAt = 0;
+    let unitClickedAt = 0;
 
     function visible(el) {
       if (!el || !(el instanceof Element)) return false;
@@ -534,7 +537,28 @@
       );
     }
 
-    function santaCruzRow() {
+    function targetUnitVariants() {
+      const raw = norm(lead.unidade || "");
+
+      if (!raw) return [];
+
+      const variants = new Set([raw]);
+      variants.add(raw.replace(/\s+-\s+(rs|sc|pr)$/g, "").trim());
+      variants.add(raw.replace(/\s+do\s+sul$/g, "").trim());
+
+      if (raw === "santa cruz do sul") variants.add("santa cruz");
+
+      return [...variants].filter(Boolean);
+    }
+
+    function targetUnitLabel() {
+      return String(lead.unidade || "").trim() || "unidade do lead";
+    }
+
+    function unitRow() {
+      const variants = targetUnitVariants();
+      if (!variants.length) return null;
+
       const matches = all(
         "button,a,[role=button],[role=menuitem],[tabindex],div,span,p,strong"
       )
@@ -542,23 +566,27 @@
           if (!visible(el)) return false;
 
           const text = norm(el.textContent);
-          if (text !== "santa cruz" && !text.startsWith("santa cruz")) {
+          if (
+            !variants.some(
+              (variant) =>
+                text === variant ||
+                text.startsWith(variant + " ") ||
+                variant.startsWith(text + " ")
+            )
+          ) {
             return false;
           }
 
-          const r = el.getBoundingClientRect();
+          const rect = el.getBoundingClientRect();
 
-          // Ignora o seletor superior da conta.
-          if (r.top < 145 && r.left > window.innerWidth * 0.55) return false;
-
-          // A linha da unidade aparece na região esquerda/central da tela.
-          if (r.top < 140) return false;
-          if (r.left > window.innerWidth * 0.68) return false;
+          if (rect.top < 145 && rect.left > window.innerWidth * 0.55) return false;
+          if (rect.top < 120) return false;
+          if (rect.left > window.innerWidth * 0.78) return false;
 
           return true;
         })
         .map((el) => {
-          const r = el.getBoundingClientRect();
+          const rect = el.getBoundingClientRect();
           const target = clickable(el);
           let score = 0;
 
@@ -566,10 +594,13 @@
           if (el.matches("button,a,[role=button],[role=menuitem],[tabindex]")) {
             score += 20;
           }
-          if (r.left < window.innerWidth * 0.45) score += 10;
-          if (r.width > 80) score += 5;
+          if (rect.left < window.innerWidth * 0.55) score += 10;
+          if (rect.width > 80) score += 5;
 
-          return { el, score, area: r.width * r.height };
+          const text = norm(el.textContent);
+          if (variants.includes(text)) score += 20;
+
+          return { el, score, area: rect.width * rect.height };
         })
         .sort((a, b) => b.score - a.score || a.area - b.area);
 
@@ -577,12 +608,19 @@
       return found ? bestActionAncestor(found) : null;
     }
 
-    function santaCruzChatLoaded() {
-      return Boolean(
-        findContains("h1,h2,h3,strong,span,div", [
-          ["chat", "santa", "cruz"]
-        ])
-      );
+    function unitChatLoaded() {
+      const variants = targetUnitVariants();
+      if (!variants.length) return false;
+
+      return all("h1,h2,h3,strong,span,div")
+        .filter(visible)
+        .some((el) => {
+          const text = norm(el.textContent);
+          return (
+            text.includes("chat") &&
+            variants.some((variant) => text.includes(variant))
+          );
+        });
     }
 
     function newConversationButton() {
@@ -1010,7 +1048,7 @@
         return;
       }
 
-      if (santaCruzChatLoaded()) {
+      if (unitChatLoaded()) {
         const button = newConversationButton();
 
         if (button) {
@@ -1021,7 +1059,7 @@
           );
         } else {
           showToast(
-            "Santa Cruz carregada. Aguardando Nova Conversa…"
+            `${targetUnitLabel()} carregada. Aguardando Nova Conversa…`
           );
         }
 
@@ -1029,18 +1067,25 @@
       }
 
       if (unitPanelVisible()) {
-        const row = santaCruzRow();
+        if (!targetUnitVariants().length) {
+          showToast(
+            "Não recebi a unidade deste lead. Selecione a unidade manualmente e abra Nova Conversa."
+          );
+          return;
+        }
+
+        const row = unitRow();
 
         if (row) {
           if (
-            !santaCruzClickedAt ||
-            Date.now() - santaCruzClickedAt > 5000
+            !unitClickedAt ||
+            Date.now() - unitClickedAt > 5000
           ) {
-            santaCruzClickedAt = Date.now();
+            unitClickedAt = Date.now();
 
             const clicked = safeClick(
               row,
-              "Selecionando a unidade Santa Cruz…",
+              `Selecionando a unidade ${targetUnitLabel()}…`,
               350
             );
 
@@ -1051,19 +1096,19 @@
             }
 
             setTimeout(() => {
-              if (!santaCruzChatLoaded() && unitPanelVisible()) {
+              if (!unitChatLoaded() && unitPanelVisible()) {
                 coordinateClick(row);
-                showToast("Reforçando a seleção da unidade Santa Cruz…");
+                showToast(`Reforçando a seleção da unidade ${targetUnitLabel()}…`);
               }
             }, 900);
           } else {
             showToast(
-              "Santa Cruz selecionada. Aguardando o chat carregar…"
+              `${targetUnitLabel()} selecionada. Aguardando o chat carregar…`
             );
           }
         } else {
           showToast(
-            "Lista de unidades aberta. Aguardando Santa Cruz aparecer…"
+            `Lista de unidades aberta. Aguardando ${targetUnitLabel()} aparecer…`
           );
         }
 
