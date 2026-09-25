@@ -273,6 +273,10 @@ input:focus, select:focus {
   grid-template-columns: repeat(5, 1fr);
 }
 
+.metrics.metrics-six {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
 .metrics article {
   background: var(--card);
   border: 1px solid var(--line);
@@ -290,6 +294,18 @@ input:focus, select:focus {
 
 .metrics strong {
   font-size: 30px;
+}
+
+.metrics article small {
+  display: block;
+  margin-top: 7px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.delinquent-recovery-metrics strong {
+  font-size: clamp(20px, 2vw, 28px);
 }
 
 .import-box {
@@ -454,6 +470,29 @@ html[data-theme="light"] .demand-tab.opportunity.active strong {
   flex-wrap: wrap;
 }
 
+.batch-date-field {
+  display: grid;
+  gap: 5px;
+  color: #b7bbc4;
+  font-size: 11px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.batch-date-field input {
+  min-width: 165px;
+  min-height: 42px;
+  background: #15181e;
+  color: white;
+  border-color: #373d47;
+}
+
+html[data-theme="light"] .batch-date-field input {
+  background: #ffffff;
+  color: #16181d;
+  border-color: #d9dde5;
+}
+
 .import-actions select {
   min-width: 190px;
   background: #15181e;
@@ -469,6 +508,60 @@ html[data-theme="light"] .import-actions select {
 
 .demand-table {
   min-width: 1320px;
+}
+
+.delinquent-finance-table {
+  min-width: 1720px;
+}
+
+.money-cell {
+  white-space: nowrap;
+  font-weight: 800;
+}
+
+.money-cell.recovered {
+  color: var(--green);
+}
+
+.payment-pill {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 6px 9px;
+  font-size: 11px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.payment-pill.pending {
+  background: var(--bg-soft);
+  color: var(--muted);
+}
+
+.payment-pill.partial {
+  background: var(--primary-soft);
+  color: var(--primary);
+}
+
+.payment-pill.paid {
+  background: var(--green-soft);
+  color: var(--green);
+}
+
+.payment-btn {
+  border: 0;
+  border-radius: 9px;
+  padding: 9px 11px;
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+  cursor: pointer;
+  background: var(--green-soft);
+  color: var(--green);
+}
+
+.payment-btn:hover {
+  transform: translateY(-1px);
 }
 
 .demand-pill {
@@ -787,7 +880,8 @@ html[data-theme="light"] .mail-btn {
     flex: 1;
   }
   .metrics,
-  .metrics.metrics-five {
+  .metrics.metrics-five,
+  .metrics.metrics-six {
     grid-template-columns: repeat(2, 1fr);
   }
   .import-box {
