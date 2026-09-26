@@ -1096,6 +1096,7 @@ export default function DashboardPage() {
       batchDate: string;
       processed: number;
       total: number;
+      contractEndCount: number;
       initialBalance: number | string;
     };
 
@@ -1103,7 +1104,7 @@ export default function DashboardPage() {
     setDateFilter(delinquentImportDate);
 
     setNotice(
-      `Carteira de ${new Date(`${delinquentImportDate}T12:00:00`).toLocaleDateString("pt-BR")} atualizada: ${result.total} inadimplente(s) · dados faltantes do relatório foram complementados · saldo inicial ${formatCurrency(Number(result.initialBalance || 0))}.`
+      `Carteira de ${new Date(`${delinquentImportDate}T12:00:00`).toLocaleDateString("pt-BR")} atualizada: ${result.total} inadimplente(s) · ${result.contractEndCount}/${result.total} com Fim do último contrato · saldo inicial ${formatCurrency(Number(result.initialBalance || 0))}.`
     );
   }
 
