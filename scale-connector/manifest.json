@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Leads Comercial → Scale",
-  "version": "2.6.1",
-  "description": "Seleciona a unidade do lead no Scale, preenche Nome e Telefone e exibe avisos temporários.",
+  "version": "2.7.0",
+  "description": "Preenche leads no Scale e completa automaticamente variáveis do template de cobrança de inadimplentes.",
   "permissions": [
     "storage",
     "tabs",
