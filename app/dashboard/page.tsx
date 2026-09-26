@@ -22,6 +22,11 @@ type Lead = {
   criadoEm: string;
   debtBalance?: number;
   delinquentDueDate?: string;
+  evoCustomerId?: string;
+  surname?: string;
+  lastContractDescription?: string;
+  lastContractStart?: string;
+  lastContractValue?: number;
 };
 
 type SessionInfo = {
@@ -363,6 +368,48 @@ function extractDueDateFromRow(row: Record<string, unknown>) {
   );
 }
 
+function extractLastContractStartFromRow(row: Record<string, unknown>) {
+  return normalizeImportedDate(
+    firstRawValue(row, [
+      "inicio do ultimo contrato",
+      "inicio ultimo contrato",
+      "inicio do contrato"
+    ])
+  );
+}
+
+function extractEvoCustomerIdFromRow(row: Record<string, unknown>) {
+  return firstValue(row, [
+    "id do cliente",
+    "id cliente",
+    "codigo do cliente",
+    "código do cliente"
+  ]);
+}
+
+function extractSurnameFromRow(row: Record<string, unknown>) {
+  return firstValue(row, ["sobrenome", "last name", "lastname"]);
+}
+
+function extractLastContractDescriptionFromRow(row: Record<string, unknown>) {
+  return firstValue(row, [
+    "descricao do ultimo contrato",
+    "descrição do último contrato",
+    "ultimo contrato",
+    "último contrato"
+  ]);
+}
+
+function extractLastContractValueFromRow(row: Record<string, unknown>) {
+  const raw = firstRawValue(row, [
+    "valor do ultimo contrato",
+    "valor último contrato",
+    "valor contrato"
+  ]);
+
+  return parseCurrencyValue(raw);
+}
+
 function formatTemplateDate(value: string | null | undefined) {
   if (!value) return "";
 
@@ -547,7 +594,12 @@ function rowsToLeads(rows: Record<string, unknown>[], origem: string): Lead[] {
       unitId: null,
       criadoEm: new Date().toISOString(),
       debtBalance: extractDebtBalanceFromRow(row),
-      delinquentDueDate: extractDueDateFromRow(row)
+      delinquentDueDate: extractDueDateFromRow(row),
+      evoCustomerId: extractEvoCustomerIdFromRow(row),
+      surname: extractSurnameFromRow(row),
+      lastContractDescription: extractLastContractDescriptionFromRow(row),
+      lastContractStart: extractLastContractStartFromRow(row),
+      lastContractValue: extractLastContractValueFromRow(row)
     }))
     .filter((lead) => lead.nome || lead.whatsapp || lead.email);
 }
@@ -584,7 +636,12 @@ function textToLeads(text: string, origem: string): Lead[] {
       unitId: null,
       criadoEm: new Date().toISOString(),
       debtBalance: 0,
-      delinquentDueDate: ""
+      delinquentDueDate: "",
+      evoCustomerId: "",
+      surname: "",
+      lastContractDescription: "",
+      lastContractStart: "",
+      lastContractValue: 0
     });
   }
 
@@ -1019,6 +1076,14 @@ export default function DashboardPage() {
             source: lead.origem || source,
             initial_balance: Number(lead.debtBalance || 0).toFixed(2),
             due_date: lead.delinquentDueDate || null,
+            evo_customer_id: lead.evoCustomerId || null,
+            surname: lead.surname || null,
+            last_contract_description: lead.lastContractDescription || null,
+            last_contract_start: lead.lastContractStart || null,
+            last_contract_value:
+              Number(lead.lastContractValue || 0) > 0
+                ? Number(lead.lastContractValue || 0).toFixed(2)
+                : null,
             payment_link: null
           }))
         })
@@ -1038,7 +1103,7 @@ export default function DashboardPage() {
     setDateFilter(delinquentImportDate);
 
     setNotice(
-      `Carteira de ${new Date(`${delinquentImportDate}T12:00:00`).toLocaleDateString("pt-BR")} registrada: ${result.total} inadimplente(s) · saldo inicial ${formatCurrency(Number(result.initialBalance || 0))}.`
+      `Carteira de ${new Date(`${delinquentImportDate}T12:00:00`).toLocaleDateString("pt-BR")} atualizada: ${result.total} inadimplente(s) · dados faltantes do relatório foram complementados · saldo inicial ${formatCurrency(Number(result.initialBalance || 0))}.`
     );
   }
 
