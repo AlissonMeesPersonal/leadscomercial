@@ -12,7 +12,7 @@
 
   const digits = (value) => String(value || "").replace(/\D/g, "");
 
-  const INIT_KEY = "__lc_scale_connector_v25__";
+  const INIT_KEY = "__lc_scale_connector_v27__";
 
   if (window[INIT_KEY]) return;
   window[INIT_KEY] = true;
@@ -31,6 +31,16 @@
         ddi: digits(payload.ddi || "55"),
         phone: digits(payload.phone || ""),
         unidade: String(payload.unidade || "").trim(),
+        cobranca:
+          payload.cobranca && typeof payload.cobranca === "object"
+            ? {
+                template: String(payload.cobranca.template || "").trim(),
+                variavel1: String(payload.cobranca.variavel1 || "").trim(),
+                variavel2: String(payload.cobranca.variavel2 || "").trim(),
+                variavel3: String(payload.cobranca.variavel3 || "").trim(),
+                variavel4: String(payload.cobranca.variavel4 || "").trim()
+              }
+            : null,
         createdAt: Date.now()
       };
 
@@ -119,6 +129,16 @@
       ddi: digits(inputLead?.ddi || "55"),
       phone: digits(inputLead?.phone || ""),
       unidade: String(inputLead?.unidade || "").trim(),
+      cobranca:
+        inputLead?.cobranca && typeof inputLead.cobranca === "object"
+          ? {
+              template: String(inputLead.cobranca.template || "").trim(),
+              variavel1: String(inputLead.cobranca.variavel1 || "").trim(),
+              variavel2: String(inputLead.cobranca.variavel2 || "").trim(),
+              variavel3: String(inputLead.cobranca.variavel3 || "").trim(),
+              variavel4: String(inputLead.cobranca.variavel4 || "").trim()
+            }
+          : null,
       createdAt: Number(inputLead?.createdAt || Date.now())
     };
 
@@ -146,6 +166,16 @@
         ddi: digits(lead.ddi || "55"),
         phone: digits(lead.phone || ""),
         unidade: String(lead.unidade || "").trim(),
+        cobranca:
+          lead.cobranca && typeof lead.cobranca === "object"
+            ? {
+                template: String(lead.cobranca.template || "").trim(),
+                variavel1: String(lead.cobranca.variavel1 || "").trim(),
+                variavel2: String(lead.cobranca.variavel2 || "").trim(),
+                variavel3: String(lead.cobranca.variavel3 || "").trim(),
+                variavel4: String(lead.cobranca.variavel4 || "").trim()
+              }
+            : null,
         createdAt: Date.now()
       }
     });
@@ -173,6 +203,8 @@
 
   function startAutomation(lead) {
     let finished = false;
+    let initialLeadFilled = false;
+    let templateHandled = false;
     let continueClicked = false;
     let lastActionAt = 0;
     let lastMessage = "";
@@ -925,6 +957,116 @@
       }
     }
 
+    function billingTemplateExpected() {
+      return (
+        lead.cobranca?.template === "cobranca_mensalidade_atraso"
+      );
+    }
+
+    function templateVariablesModal() {
+      if (!billingTemplateExpected()) return null;
+
+      const dialogs = all(
+        '[role="dialog"],[aria-modal="true"],div'
+      )
+        .filter((el) => {
+          if (!visible(el)) return false;
+
+          const text = norm(el.textContent);
+          return (
+            text.includes("enviar template do whatsapp") &&
+            text.includes("cobranca_mensalidade_atraso") &&
+            text.includes("variaveis")
+          );
+        })
+        .map((el) => {
+          const rect = el.getBoundingClientRect();
+          return { el, area: rect.width * rect.height };
+        })
+        .sort((a, b) => a.area - b.area);
+
+      return dialogs[0]?.el || null;
+    }
+
+    function templateVariableInputs() {
+      const modal = templateVariablesModal();
+      if (!modal) return [];
+
+      const inputs = [...modal.querySelectorAll("input")]
+        .filter(visible)
+        .filter((input) => {
+          const placeholder = norm(input.getAttribute("placeholder"));
+          const aria = norm(input.getAttribute("aria-label"));
+
+          return (
+            placeholder.includes("valor da variavel") ||
+            aria.includes("valor da variavel")
+          );
+        });
+
+      if (inputs.length >= 4) return inputs.slice(0, 4);
+
+      // Fallback caso o Scale altere apenas os placeholders.
+      return [...modal.querySelectorAll("input")]
+        .filter(visible)
+        .slice(-4);
+    }
+
+    function fillBillingTemplateVariables() {
+      if (templateHandled || !billingTemplateExpected()) return false;
+
+      const inputs = templateVariableInputs();
+      if (inputs.length < 4) return false;
+
+      const values = [
+        lead.cobranca?.variavel1 || "",
+        lead.cobranca?.variavel2 || "",
+        lead.cobranca?.variavel3 || "",
+        lead.cobranca?.variavel4 || ""
+      ];
+
+      const missing = [];
+
+      values.forEach((value, index) => {
+        if (!value) {
+          missing.push(index + 1);
+          return;
+        }
+
+        setValue(inputs[index], value);
+      });
+
+      const completed = values.every((value, index) => {
+        if (!value) return false;
+        const current = String(inputs[index]?.value || "").trim();
+
+        return (
+          current === value ||
+          norm(current) === norm(value)
+        );
+      });
+
+      templateHandled = true;
+
+      if (missing.length) {
+        showToast(
+          `Template detectado. Preenchi os dados disponíveis, mas faltam as variáveis ${missing.join(", ")} no Portal.`
+        );
+      } else if (completed) {
+        showToast(
+          "Cobrança preenchida: nome, vencimento, valor e link. Revise e clique em Enviar Template."
+        );
+      } else {
+        showToast(
+          "Template detectado. As variáveis foram enviadas aos campos; confira antes de enviar."
+        );
+      }
+
+      finished = true;
+      chrome.storage.local.remove([LEAD_KEY]);
+      return true;
+    }
+
     function countrySelected() {
       const modal = conversationModal();
       if (!modal) return false;
@@ -1056,14 +1198,31 @@
         return;
       }
 
-      showToast("Nome e telefone preenchidos. Continuar liberado.");
+      initialLeadFilled = true;
 
+      if (billingTemplateExpected()) {
+        showToast(
+          "Nome e telefone preenchidos. Clique em Continuar e escolha cobranca_mensalidade_atraso; as variáveis serão preenchidas automaticamente."
+        );
+        return;
+      }
+
+      showToast("Nome e telefone preenchidos. Continuar liberado.");
       finished = true;
       chrome.storage.local.remove([LEAD_KEY]);
     }
 
     function step() {
       if (finished) return;
+
+      if (initialLeadFilled && billingTemplateExpected()) {
+        if (fillBillingTemplateVariables()) return;
+
+        showToast(
+          "Aguardando você selecionar o template cobranca_mensalidade_atraso…"
+        );
+        return;
+      }
 
       if (modalOpen()) {
         fillModal();
@@ -1214,7 +1373,9 @@
       attempts += 1;
       step();
 
-      if (finished || attempts > 300) {
+      const maxAttempts = billingTemplateExpected() ? 1200 : 300;
+
+      if (finished || attempts > maxAttempts) {
         clearInterval(timer);
         observer.disconnect();
 
