@@ -12,7 +12,7 @@
 
   const digits = (value) => String(value || "").replace(/\D/g, "");
 
-  const INIT_KEY = "__lc_scale_connector_v27__";
+  const INIT_KEY = "__lc_scale_connector_v273__";
 
   if (window[INIT_KEY]) return;
   window[INIT_KEY] = true;
@@ -958,6 +958,124 @@
       }
     }
 
+    function inaugurationTemplateModal() {
+      const dialogs = all(
+        '[role="dialog"],[aria-modal="true"],div'
+      )
+        .filter((el) => {
+          if (!visible(el)) return false;
+
+          const text = norm(el.textContent);
+          const variableInputs = [...el.querySelectorAll("input")].filter(
+            (input) => {
+              if (!visible(input)) return false;
+              const placeholder = norm(input.getAttribute("placeholder"));
+              const aria = norm(input.getAttribute("aria-label"));
+
+              return (
+                placeholder.includes("valor da variavel") ||
+                aria.includes("valor da variavel")
+              );
+            }
+          );
+
+          return (
+            text.includes("enviar template do whatsapp") &&
+            text.includes("inauguracao_26fitt") &&
+            text.includes("variaveis") &&
+            variableInputs.length >= 1
+          );
+        })
+        .map((el) => {
+          const rect = el.getBoundingClientRect();
+          return { el, area: rect.width * rect.height };
+        })
+        .sort((a, b) => a.area - b.area);
+
+      return dialogs[0]?.el || null;
+    }
+
+    function inaugurationVariableInput() {
+      const modal = inaugurationTemplateModal();
+      if (!modal) return null;
+
+      return (
+        [...modal.querySelectorAll("input")]
+          .filter(visible)
+          .find((input) => {
+            const placeholder = norm(input.getAttribute("placeholder"));
+            const aria = norm(input.getAttribute("aria-label"));
+
+            return (
+              placeholder.includes("valor da variavel 1") ||
+              aria.includes("valor da variavel 1") ||
+              placeholder.includes("valor da variavel") ||
+              aria.includes("valor da variavel")
+            );
+          }) || null
+      );
+    }
+
+    function fillInaugurationTemplateVariable() {
+      if (templateHandled || templateFillInProgress) return false;
+
+      const input = inaugurationVariableInput();
+      if (!input) return false;
+
+      const studentName = String(lead.nome || "").trim();
+
+      if (!studentName) {
+        showToast(
+          "Template inauguração detectado, mas não recebi o nome do aluno."
+        );
+        return true;
+      }
+
+      templateFillInProgress = true;
+      setValue(input, studentName);
+
+      setTimeout(() => {
+        const freshInput = inaugurationVariableInput();
+
+        if (freshInput) {
+          const current = String(freshInput.value || "").trim();
+
+          if (
+            current !== studentName &&
+            norm(current) !== norm(studentName)
+          ) {
+            setValue(freshInput, studentName);
+          }
+        }
+
+        setTimeout(() => {
+          const finalInput = inaugurationVariableInput();
+          const finalValue = String(finalInput?.value || "").trim();
+
+          templateHandled = true;
+          templateFillInProgress = false;
+
+          if (
+            finalValue === studentName ||
+            norm(finalValue) === norm(studentName)
+          ) {
+            showToast(
+              `Template inauguração preenchido com o nome ${studentName}. Revise e clique em Enviar Template.`
+            );
+          } else {
+            showToast(
+              "Template inauguração detectado, mas não consegui preencher o nome automaticamente. Confira antes de enviar."
+            );
+          }
+
+          finished = true;
+          chrome.storage.local.remove([LEAD_KEY]);
+        }, 220);
+      }, 180);
+
+      return true;
+    }
+
     function billingTemplateExpected() {
       return (
         lead.cobranca?.template === "cobranca_mensalidade_atraso"
@@ -1286,19 +1404,29 @@
         return;
       }
 
-      showToast("Nome e telefone preenchidos. Continuar liberado.");
-      finished = true;
-      chrome.storage.local.remove([LEAD_KEY]);
+      showToast(
+        "Nome e telefone preenchidos. Se escolher o template inauguracao_26fitt, o nome do aluno será preenchido automaticamente."
+      );
+      return;
     }
 
     function step() {
       if (finished) return;
 
-      if (initialLeadFilled && billingTemplateExpected()) {
-        if (fillBillingTemplateVariables()) return;
+      if (initialLeadFilled) {
+        if (fillInaugurationTemplateVariable()) return;
+
+        if (billingTemplateExpected()) {
+          if (fillBillingTemplateVariables()) return;
+
+          showToast(
+            "Aguardando você selecionar o template cobranca_mensalidade_atraso…"
+          );
+          return;
+        }
 
         showToast(
-          "Aguardando você selecionar o template cobranca_mensalidade_atraso…"
+          "Aguardando seleção de template. No inauguracao_26fitt, o nome será preenchido automaticamente."
         );
         return;
       }
@@ -1452,7 +1580,7 @@
       attempts += 1;
       step();
 
-      const maxAttempts = billingTemplateExpected() ? 1200 : 300;
+      const maxAttempts = initialLeadFilled ? 1200 : 300;
 
       if (finished || attempts > maxAttempts) {
         clearInterval(timer);
