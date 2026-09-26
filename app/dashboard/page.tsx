@@ -21,6 +21,8 @@ type Lead = {
   unitId: string | null;
   criadoEm: string;
   debtBalance?: number;
+  delinquentDueDate?: string;
+  delinquentPaymentLink?: string;
 };
 
 type SessionInfo = {
@@ -67,6 +69,8 @@ type DelinquentItem = {
   initial_balance: number;
   recovered_amount: number;
   payment_status: "pending" | "partial" | "paid";
+  due_date: string | null;
+  payment_link: string | null;
   created_at: string;
 };
 
@@ -300,6 +304,99 @@ function parseCurrencyValue(value: unknown) {
     : 0;
 }
 
+function firstRawValue(row: Record<string, unknown>, keys: string[]) {
+  const entries = Object.entries(row);
+  const normalizedKeys = keys.map(normalizeHeader);
+
+  for (const key of normalizedKeys) {
+    const found = entries.find(([header]) =>
+      normalizeHeader(header).includes(key)
+    );
+
+    if (found && found[1] != null && String(found[1]).trim() !== "") {
+      return found[1];
+    }
+  }
+
+  return null;
+}
+
+function normalizeImportedDate(value: unknown) {
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    const year = value.getFullYear();
+    const month = String(value.getMonth() + 1).padStart(2, "0");
+    const day = String(value.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  }
+
+  if (typeof value === "number" && Number.isFinite(value)) {
+    const parsed = XLSX.SSF.parse_date_code(value);
+
+    if (parsed?.y && parsed?.m && parsed?.d) {
+      return `${String(parsed.y).padStart(4, "0")}-${String(parsed.m).padStart(2, "0")}-${String(parsed.d).padStart(2, "0")}`;
+    }
+  }
+
+  const raw = String(value ?? "").trim();
+  if (!raw) return "";
+
+  const iso = raw.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/);
+  if (iso) {
+    return `${iso[1]}-${iso[2].padStart(2, "0")}-${iso[3].padStart(2, "0")}`;
+  }
+
+  const br = raw.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{2,4})/);
+  if (br) {
+    const year = br[3].length === 2 ? `20${br[3]}` : br[3];
+    return `${year}-${br[2].padStart(2, "0")}-${br[1].padStart(2, "0")}`;
+  }
+
+  return "";
+}
+
+function extractDueDateFromRow(row: Record<string, unknown>) {
+  return normalizeImportedDate(
+    firstRawValue(row, [
+      "data de vencimento",
+      "data vencimento",
+      "dt vencimento",
+      "vencimento",
+      "venc."
+    ])
+  );
+}
+
+function extractPaymentLinkFromRow(row: Record<string, unknown>) {
+  const value = firstValue(row, [
+    "link de pagamento",
+    "link pagamento",
+    "url de pagamento",
+    "url pagamento",
+    "link cobranca",
+    "link cobrança",
+    "checkout",
+    "link pix"
+  ]);
+
+  return /^https?:\/\//i.test(value) ? value : "";
+}
+
+function formatTemplateDate(value: string | null | undefined) {
+  if (!value) return "";
+
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return value;
+
+  return `${match[3]}/${match[2]}/${match[1]}`;
+}
+
+function formatTemplateAmount(value: number) {
+  return Math.max(0, Number(value || 0)).toLocaleString("pt-BR", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  });
+}
+
 function debtHeaderPriority(header: string) {
   const key = normalizeHeader(header)
     .replace(/[^a-z0-9]+/g, " ")
@@ -467,7 +564,9 @@ function rowsToLeads(rows: Record<string, unknown>[], origem: string): Lead[] {
       ownerUserId: null,
       unitId: null,
       criadoEm: new Date().toISOString(),
-      debtBalance: extractDebtBalanceFromRow(row)
+      debtBalance: extractDebtBalanceFromRow(row),
+      delinquentDueDate: extractDueDateFromRow(row),
+      delinquentPaymentLink: extractPaymentLinkFromRow(row)
     }))
     .filter((lead) => lead.nome || lead.whatsapp || lead.email);
 }
@@ -503,7 +602,9 @@ function textToLeads(text: string, origem: string): Lead[] {
       ownerUserId: null,
       unitId: null,
       criadoEm: new Date().toISOString(),
-      debtBalance: 0
+      debtBalance: 0,
+      delinquentDueDate: "",
+      delinquentPaymentLink: ""
     });
   }
 
@@ -563,7 +664,7 @@ export default function DashboardPage() {
             "/rest/v1/commercial_delinquent_batches?select=id,batch_date,owner_user_id,unit_id,source,created_at&order=batch_date.desc"
           ),
           supabaseRequest(
-            "/rest/v1/commercial_delinquent_items?select=id,batch_id,lead_id,initial_balance,recovered_amount,payment_status,created_at&order=created_at.desc"
+            "/rest/v1/commercial_delinquent_items?select=id,batch_id,lead_id,initial_balance,recovered_amount,payment_status,due_date,payment_link,created_at&order=created_at.desc"
           )
         ]);
 
@@ -638,7 +739,7 @@ export default function DashboardPage() {
             "/rest/v1/commercial_delinquent_batches?select=id,batch_date,owner_user_id,unit_id,source,created_at&order=batch_date.desc"
           ),
           supabaseRequest(
-            "/rest/v1/commercial_delinquent_items?select=id,batch_id,lead_id,initial_balance,recovered_amount,payment_status,created_at&order=created_at.desc"
+            "/rest/v1/commercial_delinquent_items?select=id,batch_id,lead_id,initial_balance,recovered_amount,payment_status,due_date,payment_link,created_at&order=created_at.desc"
           )
         ]);
 
@@ -895,7 +996,7 @@ export default function DashboardPage() {
         "/rest/v1/commercial_delinquent_batches?select=id,batch_date,owner_user_id,unit_id,source,created_at&order=batch_date.desc"
       ),
       supabaseRequest(
-        "/rest/v1/commercial_delinquent_items?select=id,batch_id,lead_id,initial_balance,recovered_amount,payment_status,created_at&order=created_at.desc"
+        "/rest/v1/commercial_delinquent_items?select=id,batch_id,lead_id,initial_balance,recovered_amount,payment_status,due_date,payment_link,created_at&order=created_at.desc"
       )
     ]);
 
@@ -936,7 +1037,9 @@ export default function DashboardPage() {
             email: lead.email.trim() || null,
             city: lead.cidade.trim() || null,
             source: lead.origem || source,
-            initial_balance: Number(lead.debtBalance || 0).toFixed(2)
+            initial_balance: Number(lead.debtBalance || 0).toFixed(2),
+            due_date: lead.delinquentDueDate || null,
+            payment_link: lead.delinquentPaymentLink || null
           }))
         })
       }
@@ -1337,6 +1440,18 @@ export default function DashboardPage() {
   async function startScale(lead: Lead) {
     const full = normalizeWhatsApp(lead.whatsapp);
     const phone = full.startsWith("55") ? full.slice(2) : full;
+    const delinquentItem =
+      lead.tipo === "delinquent"
+        ? delinquentItemByLead.get(lead.id) || null
+        : null;
+    const openBalance = delinquentItem
+      ? Math.max(
+          0,
+          Number(delinquentItem.initial_balance || 0) -
+            Number(delinquentItem.recovered_amount || 0)
+        )
+      : 0;
+
     const payload = {
       nome: lead.nome,
       ddi: "55",
@@ -1345,12 +1460,37 @@ export default function DashboardPage() {
         (lead.unitId ? unitById.get(lead.unitId)?.name : null) ||
         lead.cidade ||
         sessionInfo?.unitName ||
-        ""
+        "",
+      cobranca:
+        lead.tipo === "delinquent" && delinquentItem
+          ? {
+              template: "cobranca_mensalidade_atraso",
+              variavel1: lead.nome.trim(),
+              variavel2: formatTemplateDate(delinquentItem.due_date),
+              variavel3: formatTemplateAmount(openBalance),
+              variavel4: delinquentItem.payment_link || ""
+            }
+          : null
     };
 
     try {
       await navigator.clipboard.writeText(
-        `Nome: ${lead.nome}\nDDI: +55\nTelefone: ${phone}`
+        [
+          `Nome: ${lead.nome}`,
+          "DDI: +55",
+          `Telefone: ${phone}`,
+          delinquentItem
+            ? `Vencimento: ${formatTemplateDate(delinquentItem.due_date) || "não informado"}`
+            : null,
+          delinquentItem
+            ? `Valor em aberto: ${formatTemplateAmount(openBalance)}`
+            : null,
+          delinquentItem?.payment_link
+            ? `Link: ${delinquentItem.payment_link}`
+            : null
+        ]
+          .filter(Boolean)
+          .join("\n")
       );
     } catch {}
 
