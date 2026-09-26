@@ -973,10 +973,23 @@
           if (!visible(el)) return false;
 
           const text = norm(el.textContent);
+          const variableInputs = [...el.querySelectorAll("input")].filter(
+            (input) => {
+              if (!visible(input)) return false;
+              const placeholder = norm(input.getAttribute("placeholder"));
+              const aria = norm(input.getAttribute("aria-label"));
+              return (
+                placeholder.includes("valor da variavel") ||
+                aria.includes("valor da variavel")
+              );
+            }
+          );
+
           return (
             text.includes("enviar template do whatsapp") &&
             text.includes("cobranca_mensalidade_atraso") &&
-            text.includes("variaveis")
+            text.includes("variaveis") &&
+            variableInputs.length >= 4
           );
         })
         .map((el) => {
