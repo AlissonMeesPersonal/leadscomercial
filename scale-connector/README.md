@@ -37,3 +37,15 @@ Depois de atualizar os arquivos, abra `chrome://extensions` e clique em **Recarr
 - Os avisos do conector agora desaparecem automaticamente após 10 segundos.
 - O aviso faz uma transição curta antes de sair da tela.
 - Mantém o preenchimento e a seleção dinâmica de unidade da versão 2.6.0.
+
+
+### Atualização 2.7.0
+- Para inadimplentes, o Portal envia Nome, vencimento, valor em aberto e link de pagamento ao conector.
+- Depois de preencher Nome e Telefone, o conector aguarda o usuário selecionar `cobranca_mensalidade_atraso`.
+- Ao abrir as variáveis do template, preenche automaticamente:
+  - {{1}} Nome
+  - {{2}} Vencimento
+  - {{3}} Valor em aberto (sem "R$", pois o template já possui o prefixo)
+  - {{4}} Link de pagamento
+- O envio final continua manual: o usuário revisa e clica em **Enviar Template**.
+- Se vencimento ou link não existirem na importação, o conector preenche o que estiver disponível e avisa quais variáveis faltam.
