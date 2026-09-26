@@ -59,3 +59,10 @@ Depois de atualizar os arquivos, abra `chrome://extensions` e clique em **Recarr
   - {{3}} Débito
   - {{4}} Dentro do seu App da 26Fit!
 - O conector não depende mais de link de pagamento no relatório.
+
+
+### Atualização 2.7.2
+- Corrige o preenchimento da variável {{2}} do template `cobranca_mensalidade_atraso`.
+- As quatro variáveis agora são preenchidas sequencialmente, relendo os campos após cada alteração porque o Scale pode reconstruir o formulário.
+- O conector faz uma segunda tentativa automática caso algum campo continue vazio.
+- O painel de inadimplentes passa a mostrar **Fim do último contrato** antes do botão do Scale.
