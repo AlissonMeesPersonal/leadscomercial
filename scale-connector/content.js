@@ -176,6 +176,7 @@
     let continueClicked = false;
     let lastActionAt = 0;
     let lastMessage = "";
+    let toastTimer = null;
     let sidebarClickedAt = 0;
     let chatUnidadesClickedAt = 0;
     let unitClickedAt = 0;
@@ -458,13 +459,34 @@
           border: "1px solid rgba(255,255,255,.18)",
           boxShadow: "0 12px 30px rgba(0,0,0,.28)",
           font: "600 13px Arial, sans-serif",
-          maxWidth: "430px"
+          maxWidth: "430px",
+          opacity: "1",
+          transform: "translateY(0)",
+          transition: "opacity .25s ease, transform .25s ease"
         });
 
         document.documentElement.appendChild(toast);
       }
 
+      toast.style.opacity = "1";
+      toast.style.transform = "translateY(0)";
       toast.textContent = "Leads Comercial: " + message;
+
+      if (toastTimer) {
+        clearTimeout(toastTimer);
+      }
+
+      toastTimer = setTimeout(() => {
+        const currentToast = document.getElementById("lc-scale-toast");
+        if (!currentToast) return;
+
+        currentToast.style.opacity = "0";
+        currentToast.style.transform = "translateY(8px)";
+
+        setTimeout(() => {
+          currentToast.remove();
+        }, 280);
+      }, 10000);
     }
 
     function sidebarChatIcon() {
