@@ -1067,7 +1067,7 @@
         );
       } else if (completed) {
         showToast(
-          "Cobrança preenchida: nome, vencimento, valor e link. Revise e clique em Enviar Template."
+          "Cobrança preenchida: nome, fim do último contrato, débito e orientação do App. Revise e clique em Enviar Template."
         );
       } else {
         showToast(
