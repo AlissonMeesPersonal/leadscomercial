@@ -31,3 +31,9 @@ Depois de atualizar os arquivos, abra `chrome://extensions` e clique em **Recarr
 - O Leads Comercial envia a unidade junto com nome e telefone.
 - O conector seleciona automaticamente Rio Grande, Santa Cruz do Sul ou outra unidade vinculada ao lead.
 - Para aplicar em um computador que já possui a extensão: abra `chrome://extensions`, clique em **Recarregar** e depois atualize as abas do Leads Comercial e do Scale.
+
+
+### Atualização 2.6.1
+- Os avisos do conector agora desaparecem automaticamente após 10 segundos.
+- O aviso faz uma transição curta antes de sair da tela.
+- Mantém o preenchimento e a seleção dinâmica de unidade da versão 2.6.0.
