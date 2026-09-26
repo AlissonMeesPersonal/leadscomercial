@@ -66,3 +66,9 @@ Depois de atualizar os arquivos, abra `chrome://extensions` e clique em **Recarr
 - As quatro variáveis agora são preenchidas sequencialmente, relendo os campos após cada alteração porque o Scale pode reconstruir o formulário.
 - O conector faz uma segunda tentativa automática caso algum campo continue vazio.
 - O painel de inadimplentes passa a mostrar **Fim do último contrato** antes do botão do Scale.
+
+
+### Atualização 2.7.3
+- Suporte ao template `inauguracao_26fitt`.
+- Ao abrir esse template depois de iniciar a conversa, a variável {{1}} recebe automaticamente o mesmo nome do aluno enviado pelo Leads Comercial.
+- O usuário continua revisando a pré-visualização e clicando manualmente em **Enviar Template**.
