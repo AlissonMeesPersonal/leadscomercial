@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Leads Comercial → Scale",
-  "version": "2.6.0",
-  "description": "Seleciona automaticamente a unidade do lead no Scale e preenche Nome e Telefone no modal Nova Conversa.",
+  "version": "2.6.1",
+  "description": "Seleciona a unidade do lead no Scale, preenche Nome e Telefone e exibe avisos temporários.",
   "permissions": [
     "storage",
     "tabs",
