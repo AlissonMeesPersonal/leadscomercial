@@ -570,7 +570,7 @@ html[data-theme="light"] .import-actions select {
 }
 
 .delinquent-finance-table {
-  min-width: 1460px;
+  min-width: 1580px;
 }
 
 .delinquent-finance-table th:last-child,
@@ -1066,4 +1066,11 @@ html[data-theme="light"] .mail-btn {
   .metrics strong {
     font-size: 24px;
   }
+}
+
+
+.date-cell {
+  white-space: nowrap;
+  font-weight: 800;
+  color: var(--text);
 }
