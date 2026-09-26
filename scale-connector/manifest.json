@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Leads Comercial → Scale",
-  "version": "2.7.0",
-  "description": "Preenche leads no Scale e completa automaticamente variáveis do template de cobrança de inadimplentes.",
+  "version": "2.7.1",
+  "description": "Preenche leads no Scale e completa o template de cobrança com dados do relatório de inadimplentes.",
   "permissions": [
     "storage",
     "tabs",
