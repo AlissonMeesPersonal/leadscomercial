@@ -190,7 +190,7 @@ export default function AdminPage() {
           "/rest/v1/commercial_units?select=id,name,city,active,created_at&order=name.asc"
         ),
         supabaseRequest(
-          "/rest/v1/commercial_users?select=id,username,display_name,role,unit_id,active,last_login_at,created_at&order=created_at.asc"
+          "/rest/v1/commercial_users?select=id,username,display_name,role,unit_id,active,last_login_at,created_at&deleted_at=is.null&order=created_at.asc"
         ),
         supabaseRequest(
           "/rest/v1/commercial_leads?select=owner_user_id,demand_type,status,source,created_at&order=created_at.desc"
@@ -323,6 +323,33 @@ export default function AdminPage() {
     } catch (err) {
       setNotice(
         err instanceof Error ? err.message : "Não foi possível alterar a senha."
+      );
+    }
+  }
+
+
+  async function deleteUser(user: CommercialUser) {
+    const confirmed = window.confirm(
+      `Excluir o usuário "${user.display_name}" (@${user.username})?\n\nO acesso será removido e o usuário deixará de aparecer no ADM. O histórico operacional e os leads serão preservados.`
+    );
+
+    if (!confirmed) return;
+
+    setNotice("");
+
+    try {
+      await supabaseRequest("/rest/v1/rpc/commercial_admin_delete_user", {
+        method: "POST",
+        body: JSON.stringify({
+          p_user_id: user.id
+        })
+      });
+
+      setNotice(`Usuário ${user.display_name} excluído com sucesso.`);
+      await loadData();
+    } catch (err) {
+      setNotice(
+        err instanceof Error ? err.message : "Não foi possível excluir o usuário."
       );
     }
   }
@@ -620,6 +647,14 @@ export default function AdminPage() {
                               onClick={() => void toggleUser(user)}
                             >
                               {user.active ? "Desativar" : "Reativar"}
+                            </button>
+                            <button
+                              className="delete-btn compact-action"
+                              type="button"
+                              onClick={() => void deleteUser(user)}
+                              title="Excluir este usuário"
+                            >
+                              Excluir
                             </button>
                           </>
                         )}
