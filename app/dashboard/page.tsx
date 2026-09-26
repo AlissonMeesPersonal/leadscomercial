@@ -22,7 +22,6 @@ type Lead = {
   criadoEm: string;
   debtBalance?: number;
   delinquentDueDate?: string;
-  delinquentPaymentLink?: string;
 };
 
 type SessionInfo = {
@@ -357,28 +356,11 @@ function normalizeImportedDate(value: unknown) {
 function extractDueDateFromRow(row: Record<string, unknown>) {
   return normalizeImportedDate(
     firstRawValue(row, [
-      "data de vencimento",
-      "data vencimento",
-      "dt vencimento",
-      "vencimento",
-      "venc."
+      "fim do ultimo contrato",
+      "fim ultimo contrato",
+      "fim do contrato"
     ])
   );
-}
-
-function extractPaymentLinkFromRow(row: Record<string, unknown>) {
-  const value = firstValue(row, [
-    "link de pagamento",
-    "link pagamento",
-    "url de pagamento",
-    "url pagamento",
-    "link cobranca",
-    "link cobrança",
-    "checkout",
-    "link pix"
-  ]);
-
-  return /^https?:\/\//i.test(value) ? value : "";
 }
 
 function formatTemplateDate(value: string | null | undefined) {
@@ -565,8 +547,7 @@ function rowsToLeads(rows: Record<string, unknown>[], origem: string): Lead[] {
       unitId: null,
       criadoEm: new Date().toISOString(),
       debtBalance: extractDebtBalanceFromRow(row),
-      delinquentDueDate: extractDueDateFromRow(row),
-      delinquentPaymentLink: extractPaymentLinkFromRow(row)
+      delinquentDueDate: extractDueDateFromRow(row)
     }))
     .filter((lead) => lead.nome || lead.whatsapp || lead.email);
 }
@@ -603,8 +584,7 @@ function textToLeads(text: string, origem: string): Lead[] {
       unitId: null,
       criadoEm: new Date().toISOString(),
       debtBalance: 0,
-      delinquentDueDate: "",
-      delinquentPaymentLink: ""
+      delinquentDueDate: ""
     });
   }
 
@@ -1039,7 +1019,7 @@ export default function DashboardPage() {
             source: lead.origem || source,
             initial_balance: Number(lead.debtBalance || 0).toFixed(2),
             due_date: lead.delinquentDueDate || null,
-            payment_link: lead.delinquentPaymentLink || null
+            payment_link: null
           }))
         })
       }
@@ -1467,8 +1447,10 @@ export default function DashboardPage() {
               template: "cobranca_mensalidade_atraso",
               variavel1: lead.nome.trim(),
               variavel2: formatTemplateDate(delinquentItem.due_date),
-              variavel3: formatTemplateAmount(openBalance),
-              variavel4: delinquentItem.payment_link || ""
+              variavel3: formatTemplateAmount(
+                Number(delinquentItem.initial_balance || 0)
+              ),
+              variavel4: "Dentro do seu App da 26Fit!"
             }
           : null
     };
@@ -1480,13 +1462,13 @@ export default function DashboardPage() {
           "DDI: +55",
           `Telefone: ${phone}`,
           delinquentItem
-            ? `Vencimento: ${formatTemplateDate(delinquentItem.due_date) || "não informado"}`
+            ? `Fim do último contrato: ${formatTemplateDate(delinquentItem.due_date) || "não informado"}`
             : null,
           delinquentItem
-            ? `Valor em aberto: ${formatTemplateAmount(openBalance)}`
+            ? `Débito: ${formatTemplateAmount(Number(delinquentItem.initial_balance || 0))}`
             : null,
-          delinquentItem?.payment_link
-            ? `Link: ${delinquentItem.payment_link}`
+          delinquentItem
+            ? "Pagamento: Dentro do seu App da 26Fit!"
             : null
         ]
           .filter(Boolean)
