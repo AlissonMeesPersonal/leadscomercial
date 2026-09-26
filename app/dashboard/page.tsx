@@ -1908,6 +1908,7 @@ export default function DashboardPage() {
                 {activeTab === "delinquent" && (
                   <>
                     <th>Saldo devedor</th>
+                    <th>Fim do último contrato</th>
                     <th>Recuperado</th>
                     <th>Pagamento</th>
                   </>
@@ -1968,6 +1969,11 @@ export default function DashboardPage() {
                         <td className="money-cell">
                           {delinquentItem
                             ? formatCurrency(Number(delinquentItem.initial_balance || 0))
+                            : "—"}
+                        </td>
+                        <td className="date-cell">
+                          {delinquentItem?.due_date
+                            ? formatTemplateDate(delinquentItem.due_date)
                             : "—"}
                         </td>
                         <td className="money-cell recovered">
@@ -2062,7 +2068,7 @@ export default function DashboardPage() {
 
               {!filtered.length && (
                 <tr>
-                  <td colSpan={activeTab === "delinquent" ? 10 : 7} className="empty">
+                  <td colSpan={activeTab === "delinquent" ? 11 : 7} className="empty">
                     Nenhum {activeTab === "delinquent" ? "inadimplente" : activeTab === "inactive" ? "aluno inativo" : "registro de oportunidade"} encontrado nesta carteira.
                   </td>
                 </tr>
