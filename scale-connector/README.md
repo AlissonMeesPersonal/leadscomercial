@@ -49,3 +49,13 @@ Depois de atualizar os arquivos, abra `chrome://extensions` e clique em **Recarr
   - {{4}} Link de pagamento
 - O envio final continua manual: o usuário revisa e clica em **Enviar Template**.
 - Se vencimento ou link não existirem na importação, o conector preenche o que estiver disponível e avisa quais variáveis faltam.
+
+
+### Atualização 2.7.1
+- Ajuste do template `cobranca_mensalidade_atraso` conforme o relatório real do EVO.
+- Variáveis:
+  - {{1}} Nome
+  - {{2}} Fim do último contrato
+  - {{3}} Débito
+  - {{4}} Dentro do seu App da 26Fit!
+- O conector não depende mais de link de pagamento no relatório.
