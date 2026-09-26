@@ -205,6 +205,7 @@
     let finished = false;
     let initialLeadFilled = false;
     let templateHandled = false;
+    let templateFillInProgress = false;
     let continueClicked = false;
     let lastActionAt = 0;
     let lastMessage = "";
@@ -1026,7 +1027,8 @@
     }
 
     function fillBillingTemplateVariables() {
-      if (templateHandled || !billingTemplateExpected()) return false;
+      if (!billingTemplateExpected()) return false;
+      if (templateHandled || templateFillInProgress) return true;
 
       const inputs = templateVariableInputs();
       if (inputs.length < 4) return false;
@@ -1038,45 +1040,109 @@
         lead.cobranca?.variavel4 || ""
       ];
 
-      const missing = [];
+      templateFillInProgress = true;
 
-      values.forEach((value, index) => {
-        if (!value) {
-          missing.push(index + 1);
+      const fillIndex = (index) => {
+        if (index >= values.length) {
+          setTimeout(() => {
+            const freshInputs = templateVariableInputs();
+            const missing = [];
+            const failed = [];
+
+            values.forEach((value, currentIndex) => {
+              if (!value) {
+                missing.push(currentIndex + 1);
+                return;
+              }
+
+              const current = String(
+                freshInputs[currentIndex]?.value || ""
+              ).trim();
+
+              if (
+                current !== value &&
+                norm(current) !== norm(value)
+              ) {
+                failed.push(currentIndex + 1);
+              }
+            });
+
+            // Uma segunda passada apenas nos campos que o Scale redesenhou.
+            if (failed.length) {
+              failed.forEach((variableNumber) => {
+                const retryInputs = templateVariableInputs();
+                const input = retryInputs[variableNumber - 1];
+                const value = values[variableNumber - 1];
+
+                if (input && value) {
+                  setValue(input, value);
+                }
+              });
+            }
+
+            setTimeout(() => {
+              const finalInputs = templateVariableInputs();
+              const stillMissing = [];
+
+              values.forEach((value, currentIndex) => {
+                if (!value) {
+                  stillMissing.push(currentIndex + 1);
+                  return;
+                }
+
+                const current = String(
+                  finalInputs[currentIndex]?.value || ""
+                ).trim();
+
+                if (
+                  current !== value &&
+                  norm(current) !== norm(value)
+                ) {
+                  stillMissing.push(currentIndex + 1);
+                }
+              });
+
+              templateHandled = true;
+              templateFillInProgress = false;
+
+              if (stillMissing.length) {
+                showToast(
+                  `Template detectado, mas não consegui preencher automaticamente as variáveis ${stillMissing.join(", ")}. Confira antes de enviar.`
+                );
+              } else {
+                showToast(
+                  "Cobrança preenchida: nome, fim do último contrato, débito e orientação do App. Revise e clique em Enviar Template."
+                );
+              }
+
+              finished = true;
+              chrome.storage.local.remove([LEAD_KEY]);
+            }, 260);
+          }, 260);
+
           return;
         }
 
-        setValue(inputs[index], value);
-      });
+        const value = values[index];
 
-      const completed = values.every((value, index) => {
-        if (!value) return false;
-        const current = String(inputs[index]?.value || "").trim();
+        if (!value) {
+          fillIndex(index + 1);
+          return;
+        }
 
-        return (
-          current === value ||
-          norm(current) === norm(value)
-        );
-      });
+        const freshInputs = templateVariableInputs();
+        const input = freshInputs[index];
 
-      templateHandled = true;
+        if (input) {
+          setValue(input, value);
+        }
 
-      if (missing.length) {
-        showToast(
-          `Template detectado. Preenchi os dados disponíveis, mas faltam as variáveis ${missing.join(", ")} no Portal.`
-        );
-      } else if (completed) {
-        showToast(
-          "Cobrança preenchida: nome, fim do último contrato, débito e orientação do App. Revise e clique em Enviar Template."
-        );
-      } else {
-        showToast(
-          "Template detectado. As variáveis foram enviadas aos campos; confira antes de enviar."
-        );
-      }
+        // O Scale pode reconstruir os inputs a cada mudança.
+        // Por isso sempre buscamos os elementos novamente no próximo campo.
+        setTimeout(() => fillIndex(index + 1), 160);
+      };
 
-      finished = true;
-      chrome.storage.local.remove([LEAD_KEY]);
+      fillIndex(0);
       return true;
     }
 
