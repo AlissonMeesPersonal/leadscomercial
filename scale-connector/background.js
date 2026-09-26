@@ -9,6 +9,16 @@ function cleanLead(input = {}) {
     ddi: digits(input.ddi || "55"),
     phone: digits(input.phone || ""),
     unidade: String(input.unidade || "").trim(),
+    cobranca:
+      input.cobranca && typeof input.cobranca === "object"
+        ? {
+            template: String(input.cobranca.template || "").trim(),
+            variavel1: String(input.cobranca.variavel1 || "").trim(),
+            variavel2: String(input.cobranca.variavel2 || "").trim(),
+            variavel3: String(input.cobranca.variavel3 || "").trim(),
+            variavel4: String(input.cobranca.variavel4 || "").trim()
+          }
+        : null,
     createdAt: Date.now()
   };
 }
