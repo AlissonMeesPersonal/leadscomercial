@@ -588,8 +588,12 @@ export default function DelinquentExecutiveReportPage() {
       <header className="executive-report-header">
         <div className="executive-report-title-block">
           <div className="executive-brand-lockup">
-            <div className="executive-brand-mark">
-              26<span>FIT</span>
+            <div className="executive-logo-shell">
+              <img
+                src="/assets/logo-26fit-oficial-v2.svg"
+                alt="26Fit"
+                className="executive-logo executive-logo-header"
+              />
             </div>
             <div className="executive-brand-copy">
               <strong>PORTAL INTERNO</strong>
@@ -630,8 +634,12 @@ export default function DelinquentExecutiveReportPage() {
 
       <section className="executive-print-cover print-only">
         <div className="executive-print-cover-top">
-          <div className="executive-brand-mark executive-brand-mark-large">
-            26<span>FIT</span>
+          <div className="executive-logo-shell executive-logo-shell-cover">
+            <img
+              src="/assets/logo-26fit-oficial-v2.svg"
+              alt="26Fit"
+              className="executive-logo executive-logo-cover"
+            />
           </div>
           <div>
             <strong>PORTAL INTERNO</strong>
@@ -679,7 +687,13 @@ export default function DelinquentExecutiveReportPage() {
           <div className="executive-report-page executive-overview-page">
             <div className="executive-print-page-header print-only">
               <div className="executive-print-brand">
-                <strong>26<span>FIT</span></strong>
+                <div className="executive-logo-shell executive-logo-shell-page">
+                  <img
+                    src="/assets/logo-26fit-oficial-v2.svg"
+                    alt="26Fit"
+                    className="executive-logo executive-logo-page"
+                  />
+                </div>
                 <small>PORTAL INTERNO · REDE 26FIT</small>
               </div>
               <span>01 · VISÃO EXECUTIVA</span>
@@ -692,9 +706,9 @@ export default function DelinquentExecutiveReportPage() {
                 {totals.total} registros acompanhados em {totals.days} dia(s)
               </h2>
               <p>
-                O Portal 26Fit consolida a atuação das unidades, o trabalho de
-                cobrança, o volume recuperado e a evolução das carteiras da rede
-                em uma única visão gerencial.
+                Uma visão única da Rede 26Fit para acompanhar a atuação das
+                unidades, medir a eficiência da cobrança e visualizar a evolução
+                financeira das carteiras de inadimplência.
               </p>
             </div>
 
@@ -746,7 +760,13 @@ export default function DelinquentExecutiveReportPage() {
           <section className="executive-grid executive-grid-two executive-print-page-start executive-operations-page">
             <div className="executive-print-page-header print-only executive-grid-full">
               <div className="executive-print-brand">
-                <strong>26<span>FIT</span></strong>
+                <div className="executive-logo-shell executive-logo-shell-page">
+                  <img
+                    src="/assets/logo-26fit-oficial-v2.svg"
+                    alt="26Fit"
+                    className="executive-logo executive-logo-page"
+                  />
+                </div>
                 <small>PORTAL INTERNO · REDE 26FIT</small>
               </div>
               <span>02 · PERFORMANCE DA COBRANÇA</span>
@@ -867,7 +887,13 @@ export default function DelinquentExecutiveReportPage() {
           <section className="executive-grid executive-grid-two executive-print-page-start executive-network-page">
             <div className="executive-print-page-header print-only executive-grid-full">
               <div className="executive-print-brand">
-                <strong>26<span>FIT</span></strong>
+                <div className="executive-logo-shell executive-logo-shell-page">
+                  <img
+                    src="/assets/logo-26fit-oficial-v2.svg"
+                    alt="26Fit"
+                    className="executive-logo executive-logo-page"
+                  />
+                </div>
                 <small>PORTAL INTERNO · REDE 26FIT</small>
               </div>
               <span>03 · VISÃO DA REDE E CARTEIRAS</span>
@@ -928,6 +954,20 @@ export default function DelinquentExecutiveReportPage() {
           </section>
 
           <section className="executive-card executive-full-card executive-table-card executive-detail-page">
+            <div className="executive-print-page-header print-only executive-detail-print-header">
+              <div className="executive-print-brand">
+                <div className="executive-logo-shell executive-logo-shell-page">
+                  <img
+                    src="/assets/logo-26fit-oficial-v2.svg"
+                    alt="26Fit"
+                    className="executive-logo executive-logo-page"
+                  />
+                </div>
+                <small>PORTAL INTERNO · REDE 26FIT</small>
+              </div>
+              <span>04 · DETALHAMENTO DAS CARTEIRAS</span>
+            </div>
+
             <div className="executive-card-heading">
               <div>
                 <span>CARTEIRAS</span>
@@ -999,7 +1039,7 @@ export default function DelinquentExecutiveReportPage() {
               Portal Interno 26Fit · Gestão Comercial · Atualizado em{" "}
               {new Date().toLocaleString("pt-BR")}
             </span>
-            <strong>Uso interno da Rede 26Fit</strong>
+            <strong>REDE 26FIT · USO INTERNO</strong>
           </footer>
         </>
       )}
