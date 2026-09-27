@@ -561,6 +561,14 @@ export default function DelinquentExecutiveReportPage() {
     return parts.join(" · ");
   }, [unitFilter, ownerFilter, unitById, ownerById]);
 
+  const networkUnitCount = useMemo(() => {
+    return new Set(
+      filtered
+        .map((summary) => summary.batch.unit_id)
+        .filter((unitId): unitId is string => Boolean(unitId))
+    ).size;
+  }, [filtered]);
+
   const funnel = [
     { label: "Importados", value: totals.total },
     { label: "Em contato", value: totals.contacted },
@@ -586,12 +594,24 @@ export default function DelinquentExecutiveReportPage() {
       }
     >
       <header className="executive-report-header">
-        <div>
-          <p className="eyebrow">26FIT · INADIMPLÊNCIA</p>
-          <h1>Relatório executivo de recuperação</h1>
-          <p>
-            {periodLabel} · {scopeLabel}
-          </p>
+        <div className="executive-report-title-block">
+          <div className="executive-brand-lockup">
+            <div className="executive-brand-mark">
+              26<span>FIT</span>
+            </div>
+            <div className="executive-brand-copy">
+              <strong>PORTAL INTERNO</strong>
+              <small>Rede 26Fit</small>
+            </div>
+          </div>
+
+          <div className="executive-report-title-copy">
+            <p className="eyebrow">REDE 26FIT · GESTÃO DE INADIMPLÊNCIA</p>
+            <h1>Relatório executivo de recuperação</h1>
+            <p>
+              {periodLabel} · {scopeLabel}
+            </p>
+          </div>
         </div>
 
         <div className="executive-report-actions no-print">
@@ -608,12 +628,63 @@ export default function DelinquentExecutiveReportPage() {
         </div>
       </header>
 
-      {notice && <div className="notice">{notice}</div>}
+      <div className="executive-network-strip">
+        <span>REDE 26FIT</span>
+        <i />
+        <strong>Operação integrada</strong>
+        <i />
+        <span>Portal Interno</span>
+      </div>
+
+      <section className="executive-print-cover print-only">
+        <div className="executive-print-cover-top">
+          <div className="executive-brand-mark executive-brand-mark-large">
+            26<span>FIT</span>
+          </div>
+          <div>
+            <strong>PORTAL INTERNO</strong>
+            <span>Rede 26Fit</span>
+          </div>
+        </div>
+
+        <div className="executive-print-cover-main">
+          <p>GESTÃO COMERCIAL · INADIMPLÊNCIA</p>
+          <h2>Relatório executivo de recuperação</h2>
+          <span>{periodLabel}</span>
+        </div>
+
+        <div className="executive-print-cover-grid">
+          <div>
+            <span>Escopo</span>
+            <strong>{scopeLabel}</strong>
+          </div>
+          <div>
+            <span>Unidades analisadas</span>
+            <strong>{networkUnitCount || "—"}</strong>
+          </div>
+          <div>
+            <span>Carteiras / dias</span>
+            <strong>{totals.days}</strong>
+          </div>
+          <div>
+            <span>Responsável pelo relatório</span>
+            <strong>{session?.displayName || "Portal 26Fit"}</strong>
+          </div>
+        </div>
+
+        <div className="executive-print-cover-footer">
+          <span>Documento gerencial · Uso interno da Rede 26Fit</span>
+          <strong>PORTAL 26FIT</strong>
+        </div>
+      </section>
+
+      {notice && <div className="notice">{notice}</div>
 
       {loading ? (
         <div className="executive-loading">Gerando relatório...</div>
       ) : (
         <>
+          <div className="executive-report-page executive-overview-page">
           <section className="executive-hero">
             <div className="executive-hero-copy">
               <span>VISÃO EXECUTIVA</span>
@@ -621,8 +692,9 @@ export default function DelinquentExecutiveReportPage() {
                 {totals.total} registros acompanhados em {totals.days} dia(s)
               </h2>
               <p>
-                O painel consolida o trabalho de cobrança, o volume recuperado e
-                a evolução das carteiras diárias sem perder o histórico.
+                O Portal 26Fit consolida a atuação das unidades, o trabalho de
+                cobrança, o volume recuperado e a evolução das carteiras da rede
+                em uma única visão gerencial.
               </p>
             </div>
 
@@ -669,7 +741,9 @@ export default function DelinquentExecutiveReportPage() {
             </article>
           </section>
 
-          <section className="executive-grid executive-grid-two">
+          </div>
+
+          <section className="executive-grid executive-grid-two executive-print-page-start executive-operations-page">
             <article className="executive-card">
               <div className="executive-card-heading">
                 <div>
@@ -721,7 +795,7 @@ export default function DelinquentExecutiveReportPage() {
             </article>
           </section>
 
-          <section className="executive-card executive-full-card">
+          <section className="executive-card executive-full-card executive-print-page-start executive-evolution-page">
             <div className="executive-card-heading">
               <div>
                 <span>EVOLUÇÃO</span>
@@ -741,7 +815,7 @@ export default function DelinquentExecutiveReportPage() {
             />
           </section>
 
-          <section className="executive-grid executive-grid-two">
+          <section className="executive-grid executive-grid-two executive-print-page-start executive-network-page">
             <article className="executive-card">
               <div className="executive-card-heading">
                 <div>
@@ -796,7 +870,7 @@ export default function DelinquentExecutiveReportPage() {
             </article>
           </section>
 
-          <section className="executive-card executive-full-card executive-table-card">
+          <section className="executive-card executive-full-card executive-table-card executive-print-page-start executive-detail-page">
             <div className="executive-card-heading">
               <div>
                 <span>CARTEIRAS</span>
@@ -865,10 +939,10 @@ export default function DelinquentExecutiveReportPage() {
 
           <footer className="executive-report-footer">
             <span>
-              Relatório gerado a partir do histórico do Portal 26Fit ·{" "}
+              Rede 26Fit · Portal Interno · Gestão de Inadimplência ·{" "}
               {new Date().toLocaleString("pt-BR")}
             </span>
-            <strong>{session?.displayName || "Portal 26Fit"}</strong>
+            <strong>Documento gerencial 26Fit</strong>
           </footer>
         </>
       )}
