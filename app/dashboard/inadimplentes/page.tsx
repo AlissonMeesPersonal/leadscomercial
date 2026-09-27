@@ -403,6 +403,19 @@ export default function DelinquentHistoryPage() {
     return owners.filter((owner) => used.has(owner.id));
   }, [batches, owners]);
 
+  const reportHref = useMemo(() => {
+    const params = new URLSearchParams();
+
+    if (unitFilter !== "Todas") params.set("unit", unitFilter);
+    if (ownerFilter !== "Todos") params.set("owner", ownerFilter);
+    if (dateFilter) params.set("date", dateFilter);
+
+    const query = params.toString();
+    return query
+      ? `/dashboard/inadimplentes/relatorio?${query}`
+      : "/dashboard/inadimplentes/relatorio";
+  }, [unitFilter, ownerFilter, dateFilter]);
+
   function logout() {
     sessionStorage.removeItem(COMMERCIAL_ACCESS_KEY);
     location.href = "/api/logout";
@@ -422,6 +435,9 @@ export default function DelinquentHistoryPage() {
 
         <div className="topbar-actions">
           <ThemeToggle />
+          <a className="primary-btn executive-report-link" href={reportHref}>
+            Gerar relatório
+          </a>
           <a className="ghost-btn admin-link" href="/dashboard">
             Voltar ao painel
           </a>
