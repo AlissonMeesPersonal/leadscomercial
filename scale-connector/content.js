@@ -12,7 +12,7 @@
 
   const digits = (value) => String(value || "").replace(/\D/g, "");
 
-  const INIT_KEY = "__lc_scale_connector_v274__";
+  const INIT_KEY = "__lc_scale_connector_v275__";
 
   if (window[INIT_KEY]) return;
   window[INIT_KEY] = true;
@@ -41,6 +41,7 @@
                 variavel4: String(payload.cobranca.variavel4 || "").trim()
               }
             : null,
+        stage: "lead",
         createdAt: Date.now()
       };
 
@@ -139,6 +140,7 @@
               variavel4: String(inputLead.cobranca.variavel4 || "").trim()
             }
           : null,
+      stage: String(inputLead?.stage || "lead"),
       createdAt: Number(inputLead?.createdAt || Date.now())
     };
 
@@ -176,11 +178,15 @@
                 variavel4: String(lead.cobranca.variavel4 || "").trim()
               }
             : null,
+        stage: String(lead.stage || "lead"),
         createdAt: Date.now()
       }
     });
 
-    const ok = runLead(lead);
+    const ok = runLead({
+      ...lead,
+      stage: String(lead.stage || "lead")
+    });
 
     sendResponse({
       ok,
@@ -203,7 +209,7 @@
 
   function startAutomation(lead) {
     let finished = false;
-    let initialLeadFilled = false;
+    let initialLeadFilled = String(lead.stage || "") === "template";
     let templateHandled = false;
     let templateFillInProgress = false;
     let continueClicked = false;
@@ -985,10 +991,21 @@
             }
           );
 
+          const knownTemplate = nameOnlyTemplates.some((template) =>
+            text.includes(template)
+          );
+          const oneNameVariable =
+            variableInputs.length === 1 &&
+            (
+              text.includes("oi {{1}}") ||
+              text.includes("ola {{1}}") ||
+              text.includes("olá {{1}}")
+            );
+
           return (
             text.includes("enviar template do whatsapp") &&
-            nameOnlyTemplates.some((template) => text.includes(template)) &&
             text.includes("variaveis") &&
+            (knownTemplate || oneNameVariable) &&
             variableInputs.length >= 1
           );
         })
@@ -1414,6 +1431,25 @@
       }
 
       initialLeadFilled = true;
+      lead.stage = "template";
+
+      chrome.storage.local.get([LEAD_KEY], (result) => {
+        const pending = result?.[LEAD_KEY];
+
+        if (
+          pending &&
+          digits(pending.phone) === digits(lead.phone)
+        ) {
+          chrome.storage.local.set({
+            [LEAD_KEY]: {
+              ...pending,
+              nome: String(lead.nome || pending.nome || "").trim(),
+              stage: "template",
+              createdAt: Number(pending.createdAt || lead.createdAt || Date.now())
+            }
+          });
+        }
+      });
 
       if (billingTemplateExpected()) {
         showToast(
@@ -1431,11 +1467,16 @@
     function step() {
       if (finished) return;
 
-      if (initialLeadFilled) {
-        if (fillNameOnlyTemplateVariable()) return;
+      // Templates have priority because o Scale pode trocar/reconstruir a rota
+      // depois de criar a conversa. O lead continua salvo no storage.
+      if (fillNameOnlyTemplateVariable()) return;
 
+      if (billingTemplateExpected() && fillBillingTemplateVariables()) {
+        return;
+      }
+
+      if (initialLeadFilled) {
         if (billingTemplateExpected()) {
-          if (fillBillingTemplateVariables()) return;
 
           showToast(
             "Aguardando você selecionar o template cobranca_mensalidade_atraso…"
