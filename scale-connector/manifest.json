@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Leads Comercial → Scale",
-  "version": "2.7.4",
+  "version": "2.7.5",
   "description": "Preenche leads no Scale e completa automaticamente variáveis dos templates de cobrança, saudação e inauguração.",
   "permissions": [
     "storage",
