@@ -3935,3 +3935,291 @@ html[data-theme="light"] .executive-hero-highlight {
     gap: 6mm !important;
   }
 }
+
+
+/* Modo claro profissional do Relatório Executivo 26Fit */
+@media screen {
+  html[data-theme="light"] .executive-report {
+    background:
+      radial-gradient(circle at 92% 2%, rgba(255, 106, 0, .08), transparent 24%),
+      #f2f4f7 !important;
+    color: #17191d !important;
+  }
+
+  html[data-theme="light"] .executive-report-header {
+    background: #ffffff !important;
+    border: 1px solid #e2e5ea !important;
+    border-top: 3px solid #ff6a00 !important;
+    border-radius: 18px !important;
+    padding: 18px 20px !important;
+    box-shadow: 0 10px 30px rgba(16, 20, 28, .06) !important;
+  }
+
+  html[data-theme="light"] .executive-report-title-copy h1 {
+    color: #181a1f !important;
+  }
+
+  html[data-theme="light"] .executive-report-title-copy > p:last-child,
+  html[data-theme="light"] .executive-brand-copy small {
+    color: #717783 !important;
+  }
+
+  html[data-theme="light"] .executive-brand-lockup {
+    border-color: #e1e4e9 !important;
+  }
+
+  html[data-theme="light"] .executive-network-strip {
+    background: #17191d !important;
+    color: #f5f6f8 !important;
+    box-shadow: 0 6px 18px rgba(16, 20, 28, .08) !important;
+  }
+
+  html[data-theme="light"] .executive-network-strip span {
+    color: #d5d8dd !important;
+  }
+
+  html[data-theme="light"] .executive-network-strip strong {
+    color: #ff7614 !important;
+  }
+
+  /* Hero */
+  html[data-theme="light"] .executive-hero {
+    background:
+      radial-gradient(circle at 95% 0%, rgba(255, 106, 0, .11), transparent 36%),
+      #ffffff !important;
+    border: 1px solid #e2e5ea !important;
+    box-shadow: 0 12px 34px rgba(16, 20, 28, .06) !important;
+    color: #17191d !important;
+  }
+
+  html[data-theme="light"] .executive-hero-copy > span {
+    color: #f06400 !important;
+  }
+
+  html[data-theme="light"] .executive-hero-copy h2 {
+    color: #191b20 !important;
+  }
+
+  html[data-theme="light"] .executive-hero-copy p {
+    color: #686f7b !important;
+  }
+
+  html[data-theme="light"] .executive-hero-highlight {
+    background:
+      linear-gradient(145deg, #191b20 0%, #24272e 100%) !important;
+    border: 1px solid #31343b !important;
+    border-left: 4px solid #ff6a00 !important;
+    color: #ffffff !important;
+    box-shadow: 0 12px 28px rgba(16, 20, 28, .12) !important;
+  }
+
+  html[data-theme="light"] .executive-hero-highlight span,
+  html[data-theme="light"] .executive-hero-highlight small {
+    color: #adb2bb !important;
+  }
+
+  html[data-theme="light"] .executive-hero-highlight strong {
+    color: #ffffff !important;
+  }
+
+  /* KPIs */
+  html[data-theme="light"] .executive-kpis article {
+    background: #ffffff !important;
+    border: 1px solid #e0e4ea !important;
+    box-shadow: 0 8px 22px rgba(16, 20, 28, .045) !important;
+  }
+
+  html[data-theme="light"] .executive-kpis article::before {
+    background: #ff6a00 !important;
+  }
+
+  html[data-theme="light"] .executive-kpis span,
+  html[data-theme="light"] .executive-kpis small {
+    color: #727985 !important;
+  }
+
+  html[data-theme="light"] .executive-kpis strong {
+    color: #191b20 !important;
+  }
+
+  /* Cards / gráficos */
+  html[data-theme="light"] .executive-report .executive-card {
+    background: #ffffff !important;
+    border-color: #e1e4e9 !important;
+    box-shadow: 0 10px 28px rgba(16, 20, 28, .05) !important;
+  }
+
+  html[data-theme="light"] .executive-report .executive-card-heading {
+    background: #fafbfc !important;
+    border-color: #e4e7ec !important;
+  }
+
+  html[data-theme="light"] .executive-report .executive-card-heading h3 {
+    color: #1b1d22 !important;
+  }
+
+  html[data-theme="light"] .executive-report .executive-card-heading > small {
+    color: #777e89 !important;
+  }
+
+  html[data-theme="light"] .executive-report .executive-card-heading > div > span {
+    color: #ed6200 !important;
+  }
+
+  html[data-theme="light"] .executive-funnel-step > span {
+    background: #fff0e5 !important;
+    color: #e75c00 !important;
+    border: 1px solid #ffd3b4 !important;
+  }
+
+  html[data-theme="light"] .executive-funnel-step strong,
+  html[data-theme="light"] .executive-funnel-step b {
+    color: #202228 !important;
+  }
+
+  html[data-theme="light"] .executive-funnel-track,
+  html[data-theme="light"] .executive-bar-track {
+    background: #eceff3 !important;
+  }
+
+  html[data-theme="light"] .executive-funnel-track i,
+  html[data-theme="light"] .executive-bar-track span {
+    background: linear-gradient(90deg, #ff6a00, #ff9a4b) !important;
+  }
+
+  html[data-theme="light"] .executive-bar-label strong,
+  html[data-theme="light"] .executive-bar-row > b {
+    color: #202228 !important;
+  }
+
+  html[data-theme="light"] .executive-bar-label span {
+    color: #777e89 !important;
+  }
+
+  /* Snapshot */
+  html[data-theme="light"] .executive-day-snapshot > div {
+    background: #f7f8fa !important;
+    border-color: #e1e4e9 !important;
+  }
+
+  html[data-theme="light"] .executive-day-snapshot span {
+    color: #737a85 !important;
+  }
+
+  html[data-theme="light"] .executive-day-snapshot strong {
+    color: #1c1e23 !important;
+  }
+
+  /* Linha de evolução */
+  html[data-theme="light"] .trend-axis {
+    stroke: #d8dde4 !important;
+  }
+
+  html[data-theme="light"] .trend-line {
+    stroke: #ff6a00 !important;
+  }
+
+  html[data-theme="light"] .trend-dot {
+    fill: #ffffff !important;
+    stroke: #ff6a00 !important;
+  }
+
+  html[data-theme="light"] .trend-label {
+    fill: #6f7681 !important;
+  }
+
+  html[data-theme="light"] .executive-trend-legend > div {
+    background: #f7f8fa !important;
+    border: 1px solid #e3e6eb !important;
+  }
+
+  html[data-theme="light"] .executive-trend-legend span,
+  html[data-theme="light"] .executive-trend-legend small {
+    color: #747b86 !important;
+  }
+
+  html[data-theme="light"] .executive-trend-legend strong {
+    color: #1e2025 !important;
+  }
+
+  /* Insights */
+  html[data-theme="light"] .executive-insights > div {
+    background: #f7f8fa !important;
+    border-color: #e1e4e9 !important;
+  }
+
+  html[data-theme="light"] .executive-insights span,
+  html[data-theme="light"] .executive-insights p {
+    color: #737a85 !important;
+  }
+
+  html[data-theme="light"] .executive-insights strong {
+    color: #1d1f24 !important;
+  }
+
+  /* Tabela */
+  html[data-theme="light"] .executive-table th {
+    background: #202228 !important;
+    color: #ff8a36 !important;
+    border-color: #30333a !important;
+  }
+
+  html[data-theme="light"] .executive-table td {
+    color: #24262b !important;
+    border-color: #e3e6eb !important;
+  }
+
+  html[data-theme="light"] .executive-table tbody tr:nth-child(odd) td {
+    background: #ffffff !important;
+  }
+
+  html[data-theme="light"] .executive-table tbody tr:nth-child(even) td {
+    background: #f8f9fb !important;
+  }
+
+  html[data-theme="light"] .executive-table tbody tr:hover td {
+    background: #fff4ec !important;
+  }
+
+  html[data-theme="light"] .executive-table td.positive,
+  html[data-theme="light"] .positive {
+    color: #148054 !important;
+  }
+
+  /* Footer */
+  html[data-theme="light"] .executive-report-footer {
+    color: #7c838d !important;
+    border-color: #dde1e6 !important;
+  }
+
+  html[data-theme="light"] .executive-report-footer strong {
+    color: #e55c00 !important;
+  }
+
+  /* Botões do relatório */
+  html[data-theme="light"] .executive-report-actions .ghost-btn,
+  html[data-theme="light"] .executive-report-actions .theme-toggle {
+    background: #ffffff !important;
+    color: #1d1f24 !important;
+    border: 1px solid #dfe3e8 !important;
+    box-shadow: 0 5px 14px rgba(16, 20, 28, .04) !important;
+  }
+
+  html[data-theme="light"] .executive-report-actions .ghost-btn:hover,
+  html[data-theme="light"] .executive-report-actions .theme-toggle:hover {
+    background: #f7f8fa !important;
+    border-color: #ccd1d8 !important;
+  }
+
+  html[data-theme="light"] .executive-report-actions .primary-btn {
+    background: #ff6a00 !important;
+    color: #ffffff !important;
+    box-shadow: 0 7px 18px rgba(255, 106, 0, .18) !important;
+  }
+
+  /* A logo continua preta mesmo no modo claro para preservar identidade. */
+  html[data-theme="light"] .executive-logo-shell {
+    background: #000000 !important;
+    border-color: rgba(255, 106, 0, .5) !important;
+  }
+}
