@@ -19,6 +19,7 @@ function cleanLead(input = {}) {
             variavel4: String(input.cobranca.variavel4 || "").trim()
           }
         : null,
+    stage: String(input.stage || "lead"),
     createdAt: Date.now()
   };
 }
