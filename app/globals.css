@@ -2055,3 +2055,427 @@ html[data-theme="light"] .executive-hero-highlight {
     break-inside: avoid;
   }
 }
+
+
+/* Identidade corporativa Rede 26Fit no relatório */
+.executive-report-title-block {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  min-width: 0;
+}
+
+.executive-brand-lockup {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding-right: 20px;
+  border-right: 1px solid var(--line);
+  flex: 0 0 auto;
+}
+
+.executive-brand-mark {
+  min-width: 76px;
+  font-size: 28px;
+  line-height: 1;
+  font-weight: 950;
+  letter-spacing: -.06em;
+  color: var(--text);
+}
+
+.executive-brand-mark span {
+  color: var(--primary);
+}
+
+.executive-brand-copy {
+  display: grid;
+  gap: 2px;
+}
+
+.executive-brand-copy strong {
+  font-size: 10px;
+  letter-spacing: .12em;
+}
+
+.executive-brand-copy small {
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.executive-report-title-copy {
+  min-width: 0;
+}
+
+.executive-network-strip {
+  min-height: 34px;
+  margin: -8px 0 18px;
+  padding: 8px 14px;
+  border-radius: 10px;
+  background: #15171b;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: fit-content;
+  font-size: 9px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.executive-network-strip strong {
+  color: #ff7a16;
+}
+
+.executive-network-strip i {
+  display: block;
+  width: 3px;
+  height: 3px;
+  border-radius: 999px;
+  background: #ff7a16;
+}
+
+.print-only {
+  display: none;
+}
+
+.executive-report-page {
+  margin-bottom: 18px;
+}
+
+@media (max-width: 1000px) {
+  .executive-report-title-block {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .executive-brand-lockup {
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+    padding: 0 0 12px;
+  }
+}
+
+@media print {
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  @page {
+    size: A4 landscape;
+    margin: 7mm;
+  }
+
+  html,
+  body {
+    background: #f4f4f2 !important;
+    color: #111 !important;
+  }
+
+  .print-only {
+    display: block !important;
+  }
+
+  .executive-network-strip {
+    display: none !important;
+  }
+
+  .executive-report-header {
+    padding: 0 0 4mm !important;
+    margin: 0 0 5mm !important;
+    border-bottom: 2px solid #ff6a00 !important;
+  }
+
+  .executive-report-title-block {
+    gap: 12px !important;
+  }
+
+  .executive-brand-lockup {
+    border-right: 1px solid #d6d6d1 !important;
+  }
+
+  .executive-brand-mark {
+    color: #111 !important;
+  }
+
+  .executive-brand-mark span,
+  .executive-report .eyebrow,
+  .executive-card-heading > div > span,
+  .executive-hero-copy > span {
+    color: #ff6a00 !important;
+  }
+
+  .executive-brand-copy small,
+  .executive-report-header p,
+  .executive-card-heading > small,
+  .executive-kpis span,
+  .executive-kpis small,
+  .executive-insights span,
+  .executive-insights p,
+  .executive-bar-label span,
+  .executive-trend-legend span,
+  .executive-trend-legend small {
+    color: #646464 !important;
+  }
+
+  .executive-print-cover {
+    min-height: 180mm;
+    padding: 12mm 14mm;
+    margin: 0;
+    background:
+      linear-gradient(135deg, #0f1012 0%, #17191d 70%, #2b1708 100%) !important;
+    color: #fff !important;
+    border-radius: 0;
+    position: relative;
+    overflow: hidden;
+    page-break-after: always;
+  }
+
+  .executive-print-cover::before {
+    content: "";
+    position: absolute;
+    width: 95mm;
+    height: 95mm;
+    border-radius: 50%;
+    right: -28mm;
+    top: -30mm;
+    background: rgba(255, 106, 0, .16) !important;
+  }
+
+  .executive-print-cover::after {
+    content: "";
+    position: absolute;
+    left: 14mm;
+    right: 14mm;
+    bottom: 25mm;
+    height: 1px;
+    background: rgba(255,255,255,.18) !important;
+  }
+
+  .executive-print-cover-top {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    position: relative;
+    z-index: 1;
+  }
+
+  .executive-brand-mark-large {
+    min-width: auto;
+    color: #fff !important;
+    font-size: 42px;
+  }
+
+  .executive-print-cover-top > div:last-child {
+    display: grid;
+    gap: 3px;
+  }
+
+  .executive-print-cover-top strong {
+    font-size: 11px;
+    letter-spacing: .16em;
+  }
+
+  .executive-print-cover-top span {
+    color: #b8bcc4 !important;
+    font-size: 10px;
+  }
+
+  .executive-print-cover-main {
+    margin-top: 30mm;
+    max-width: 190mm;
+    position: relative;
+    z-index: 1;
+  }
+
+  .executive-print-cover-main p {
+    margin: 0 0 5mm;
+    color: #ff7a16 !important;
+    font-size: 10px;
+    font-weight: 900;
+    letter-spacing: .15em;
+  }
+
+  .executive-print-cover-main h2 {
+    margin: 0;
+    font-size: 34px;
+    line-height: 1.02;
+    max-width: 160mm;
+    color: #fff !important;
+  }
+
+  .executive-print-cover-main > span {
+    display: block;
+    margin-top: 6mm;
+    color: #d5d7dc !important;
+    font-size: 15px;
+  }
+
+  .executive-print-cover-grid {
+    margin-top: 22mm;
+    display: grid;
+    grid-template-columns: 1.4fr .7fr .7fr 1.2fr;
+    gap: 4mm;
+    position: relative;
+    z-index: 1;
+  }
+
+  .executive-print-cover-grid > div {
+    display: grid;
+    gap: 2mm;
+    padding: 4mm;
+    background: rgba(255,255,255,.07) !important;
+    border: 1px solid rgba(255,255,255,.12) !important;
+    border-radius: 3mm;
+  }
+
+  .executive-print-cover-grid span {
+    color: #aeb2ba !important;
+    font-size: 8px;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+  }
+
+  .executive-print-cover-grid strong {
+    color: #fff !important;
+    font-size: 11px;
+  }
+
+  .executive-print-cover-footer {
+    position: absolute;
+    left: 14mm;
+    right: 14mm;
+    bottom: 12mm;
+    display: flex;
+    justify-content: space-between;
+    color: #b7bac1 !important;
+    font-size: 8px;
+    z-index: 1;
+  }
+
+  .executive-print-cover-footer strong {
+    color: #ff7a16 !important;
+    letter-spacing: .1em;
+  }
+
+  .executive-report-page,
+  .executive-print-page-start {
+    break-inside: avoid;
+  }
+
+  .executive-print-page-start {
+    page-break-before: always;
+  }
+
+  .executive-overview-page {
+    min-height: 172mm;
+    display: grid;
+    align-content: start;
+  }
+
+  .executive-hero {
+    background:
+      linear-gradient(135deg, #111317 0%, #1b1e24 72%, #2a1a0e 100%) !important;
+    color: #fff !important;
+    border: 0 !important;
+    border-radius: 4mm !important;
+    padding: 8mm !important;
+    min-height: 62mm;
+  }
+
+  .executive-hero-copy h2,
+  .executive-hero-copy p {
+    color: #fff !important;
+  }
+
+  .executive-hero-copy p {
+    color: #d0d2d6 !important;
+  }
+
+  .executive-hero-highlight {
+    background: #ff6a00 !important;
+    border: 0 !important;
+    color: #fff !important;
+  }
+
+  .executive-hero-highlight span,
+  .executive-hero-highlight small {
+    color: #fff !important;
+  }
+
+  .executive-kpis article,
+  .executive-card {
+    background: #fff !important;
+    border-color: #deded9 !important;
+  }
+
+  .executive-kpis article {
+    border-top: 3px solid #ff6a00 !important;
+  }
+
+  .executive-kpis strong,
+  .executive-card h3,
+  .executive-card strong,
+  .executive-card b,
+  .executive-table td {
+    color: #111 !important;
+  }
+
+  .executive-funnel-track,
+  .executive-bar-track,
+  .executive-insights > div,
+  .executive-trend-legend > div {
+    background: #f0f0ed !important;
+  }
+
+  .executive-funnel-track i,
+  .executive-bar-track span {
+    background: #ff6a00 !important;
+  }
+
+  .trend-line {
+    stroke: #ff6a00 !important;
+  }
+
+  .trend-dot {
+    fill: #fff !important;
+    stroke: #ff6a00 !important;
+  }
+
+  .trend-axis {
+    stroke: #d1d1cc !important;
+  }
+
+  .trend-label {
+    fill: #666 !important;
+  }
+
+  .positive {
+    color: #16794b !important;
+  }
+
+  .executive-report-footer {
+    margin-top: 5mm;
+    padding-top: 3mm;
+    border-top: 1px solid #d2d2cd;
+    color: #6b6b68 !important;
+  }
+
+  .executive-report-footer strong {
+    color: #111 !important;
+  }
+
+  .executive-table th {
+    background: #15171b !important;
+    color: #fff !important;
+  }
+
+  .executive-table tbody tr:nth-child(even) td {
+    background: #f7f7f4 !important;
+  }
+
+  .executive-table th,
+  .executive-table td {
+    border-color: #e0e0db !important;
+  }
+}
