@@ -678,7 +678,7 @@ export default function DelinquentExecutiveReportPage() {
         </div>
       </section>
 
-      {notice && <div className="notice">{notice}</div>
+      {notice && <div className="notice">{notice}</div>}
 
       {loading ? (
         <div className="executive-loading">Gerando relatório...</div>
