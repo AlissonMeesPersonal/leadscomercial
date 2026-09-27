@@ -561,14 +561,6 @@ export default function DelinquentExecutiveReportPage() {
     return parts.join(" · ");
   }, [unitFilter, ownerFilter, unitById, ownerById]);
 
-  const networkUnitCount = useMemo(() => {
-    return new Set(
-      filtered
-        .map((summary) => summary.batch.unit_id)
-        .filter((unitId): unitId is string => Boolean(unitId))
-    ).size;
-  }, [filtered]);
-
   const funnel = [
     { label: "Importados", value: totals.total },
     { label: "Em contato", value: totals.contacted },
@@ -659,12 +651,12 @@ export default function DelinquentExecutiveReportPage() {
             <strong>{scopeLabel}</strong>
           </div>
           <div>
-            <span>Unidades analisadas</span>
-            <strong>{networkUnitCount || "—"}</strong>
+            <span>Registros analisados</span>
+            <strong>{totals.total}</strong>
           </div>
           <div>
             <span>Carteiras / dias</span>
-            <strong>{totals.days}</strong>
+            <strong>{filtered.length} / {totals.days}</strong>
           </div>
           <div>
             <span>Responsável pelo relatório</span>
@@ -685,6 +677,14 @@ export default function DelinquentExecutiveReportPage() {
       ) : (
         <>
           <div className="executive-report-page executive-overview-page">
+            <div className="executive-print-page-header print-only">
+              <div className="executive-print-brand">
+                <strong>26<span>FIT</span></strong>
+                <small>PORTAL INTERNO · REDE 26FIT</small>
+              </div>
+              <span>01 · VISÃO EXECUTIVA</span>
+            </div>
+
           <section className="executive-hero">
             <div className="executive-hero-copy">
               <span>VISÃO EXECUTIVA</span>
@@ -744,6 +744,14 @@ export default function DelinquentExecutiveReportPage() {
           </div>
 
           <section className="executive-grid executive-grid-two executive-print-page-start executive-operations-page">
+            <div className="executive-print-page-header print-only executive-grid-full">
+              <div className="executive-print-brand">
+                <strong>26<span>FIT</span></strong>
+                <small>PORTAL INTERNO · REDE 26FIT</small>
+              </div>
+              <span>02 · PERFORMANCE DA COBRANÇA</span>
+            </div>
+
             <article className="executive-card">
               <div className="executive-card-heading">
                 <div>
@@ -793,8 +801,48 @@ export default function DelinquentExecutiveReportPage() {
                 valueLabel={(value) => pct(value)}
               />
             </article>
+
+            {daily.length === 1 && (
+              <article className="executive-card executive-single-day-card executive-grid-full">
+                <div className="executive-card-heading">
+                  <div>
+                    <span>SNAPSHOT DO DIA</span>
+                    <h3>Resultado da carteira de {shortDate(daily[0].label)}</h3>
+                  </div>
+                  <small>Leitura rápida para acompanhamento gerencial</small>
+                </div>
+
+                <div className="executive-day-snapshot">
+                  <div>
+                    <span>Importados</span>
+                    <strong>{daily[0].total}</strong>
+                  </div>
+                  <div>
+                    <span>Em contato</span>
+                    <strong>{daily[0].contacted}</strong>
+                  </div>
+                  <div>
+                    <span>Pagaram</span>
+                    <strong>{daily[0].paid}</strong>
+                  </div>
+                  <div>
+                    <span>Conversão</span>
+                    <strong>{pct(daily[0].conversion)}</strong>
+                  </div>
+                  <div>
+                    <span>Recuperado</span>
+                    <strong>{currency(daily[0].recovered)}</strong>
+                  </div>
+                  <div>
+                    <span>Recuperação</span>
+                    <strong>{pct(daily[0].recovery)}</strong>
+                  </div>
+                </div>
+              </article>
+            )}
           </section>
 
+          {daily.length > 1 && (
           <section className="executive-card executive-full-card executive-print-page-start executive-evolution-page">
             <div className="executive-card-heading">
               <div>
@@ -814,8 +862,17 @@ export default function DelinquentExecutiveReportPage() {
               }))}
             />
           </section>
+          )}
 
           <section className="executive-grid executive-grid-two executive-print-page-start executive-network-page">
+            <div className="executive-print-page-header print-only executive-grid-full">
+              <div className="executive-print-brand">
+                <strong>26<span>FIT</span></strong>
+                <small>PORTAL INTERNO · REDE 26FIT</small>
+              </div>
+              <span>03 · VISÃO DA REDE E CARTEIRAS</span>
+            </div>
+
             <article className="executive-card">
               <div className="executive-card-heading">
                 <div>
@@ -870,7 +927,7 @@ export default function DelinquentExecutiveReportPage() {
             </article>
           </section>
 
-          <section className="executive-card executive-full-card executive-table-card executive-print-page-start executive-detail-page">
+          <section className="executive-card executive-full-card executive-table-card executive-detail-page">
             <div className="executive-card-heading">
               <div>
                 <span>CARTEIRAS</span>
@@ -939,10 +996,10 @@ export default function DelinquentExecutiveReportPage() {
 
           <footer className="executive-report-footer">
             <span>
-              Rede 26Fit · Portal Interno · Gestão de Inadimplência ·{" "}
+              Portal Interno 26Fit · Gestão Comercial · Atualizado em{" "}
               {new Date().toLocaleString("pt-BR")}
             </span>
-            <strong>Documento gerencial 26Fit</strong>
+            <strong>Uso interno da Rede 26Fit</strong>
           </footer>
         </>
       )}
