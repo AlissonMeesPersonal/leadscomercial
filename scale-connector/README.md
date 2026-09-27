@@ -72,3 +72,12 @@ Depois de atualizar os arquivos, abra `chrome://extensions` e clique em **Recarr
 - Suporte ao template `inauguracao_26fitt`.
 - Ao abrir esse template depois de iniciar a conversa, a variável {{1}} recebe automaticamente o mesmo nome do aluno enviado pelo Leads Comercial.
 - O usuário continua revisando a pré-visualização e clicando manualmente em **Enviar Template**.
+
+
+### Atualização 2.7.4
+- Adiciona suporte ao template `iniciar__conversa_oi`.
+- A variável {{1}} recebe automaticamente o mesmo nome usado ao iniciar a conversa.
+- A lógica de templates com apenas uma variável de nome foi generalizada para:
+  - `inauguracao_26fitt`
+  - `iniciar__conversa_oi`
+- O envio do template continua manual após a conferência da pré-visualização.
