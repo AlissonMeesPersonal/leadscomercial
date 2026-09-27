@@ -1685,6 +1685,15 @@ export default function DashboardPage() {
             </a>
           )}
 
+          {activeTab === "delinquent" && (
+            <a
+              className="ghost-btn delinquent-history-link"
+              href="/dashboard/inadimplentes"
+            >
+              Histórico diário
+            </a>
+          )}
+
           <input
             ref={inputRef}
             type="file"
@@ -1838,14 +1847,23 @@ export default function DashboardPage() {
 
         <div className="import-actions">
           {activeTab === "delinquent" && (
-            <label className="batch-date-field">
-              Data da carteira
-              <input
-                type="date"
-                value={delinquentImportDate}
-                onChange={(event) => setDelinquentImportDate(event.target.value)}
-              />
-            </label>
+            <>
+              <a
+                className="ghost-btn delinquent-history-link"
+                href="/dashboard/inadimplentes"
+              >
+                Histórico diário
+              </a>
+
+              <label className="batch-date-field">
+                Data da carteira
+                <input
+                  type="date"
+                  value={delinquentImportDate}
+                  onChange={(event) => setDelinquentImportDate(event.target.value)}
+                />
+              </label>
+            </>
           )}
 
           <button
