@@ -12,7 +12,7 @@
 
   const digits = (value) => String(value || "").replace(/\D/g, "");
 
-  const INIT_KEY = "__lc_scale_connector_v273__";
+  const INIT_KEY = "__lc_scale_connector_v274__";
 
   if (window[INIT_KEY]) return;
   window[INIT_KEY] = true;
@@ -958,7 +958,12 @@
       }
     }
 
-    function inaugurationTemplateModal() {
+    const nameOnlyTemplates = [
+      "inauguracao_26fitt",
+      "iniciar__conversa_oi"
+    ];
+
+    function nameOnlyTemplateModal() {
       const dialogs = all(
         '[role="dialog"],[aria-modal="true"],div'
       )
@@ -969,6 +974,7 @@
           const variableInputs = [...el.querySelectorAll("input")].filter(
             (input) => {
               if (!visible(input)) return false;
+
               const placeholder = norm(input.getAttribute("placeholder"));
               const aria = norm(input.getAttribute("aria-label"));
 
@@ -981,7 +987,7 @@
 
           return (
             text.includes("enviar template do whatsapp") &&
-            text.includes("inauguracao_26fitt") &&
+            nameOnlyTemplates.some((template) => text.includes(template)) &&
             text.includes("variaveis") &&
             variableInputs.length >= 1
           );
@@ -995,8 +1001,19 @@
       return dialogs[0]?.el || null;
     }
 
-    function inaugurationVariableInput() {
-      const modal = inaugurationTemplateModal();
+    function activeNameOnlyTemplate() {
+      const modal = nameOnlyTemplateModal();
+      if (!modal) return "";
+
+      const text = norm(modal.textContent);
+
+      return (
+        nameOnlyTemplates.find((template) => text.includes(template)) || ""
+      );
+    }
+
+    function nameOnlyVariableInput() {
+      const modal = nameOnlyTemplateModal();
       if (!modal) return null;
 
       return (
@@ -1016,17 +1033,18 @@
       );
     }
 
-    function fillInaugurationTemplateVariable() {
+    function fillNameOnlyTemplateVariable() {
       if (templateHandled || templateFillInProgress) return false;
 
-      const input = inaugurationVariableInput();
+      const input = nameOnlyVariableInput();
       if (!input) return false;
 
       const studentName = String(lead.nome || "").trim();
+      const templateName = activeNameOnlyTemplate() || "template";
 
       if (!studentName) {
         showToast(
-          "Template inauguração detectado, mas não recebi o nome do aluno."
+          `${templateName} detectado, mas não recebi o nome do aluno.`
         );
         return true;
       }
@@ -1035,7 +1053,7 @@
       setValue(input, studentName);
 
       setTimeout(() => {
-        const freshInput = inaugurationVariableInput();
+        const freshInput = nameOnlyVariableInput();
 
         if (freshInput) {
           const current = String(freshInput.value || "").trim();
@@ -1049,7 +1067,7 @@
         }
 
         setTimeout(() => {
-          const finalInput = inaugurationVariableInput();
+          const finalInput = nameOnlyVariableInput();
           const finalValue = String(finalInput?.value || "").trim();
 
           templateHandled = true;
@@ -1060,11 +1078,11 @@
             norm(finalValue) === norm(studentName)
           ) {
             showToast(
-              `Template inauguração preenchido com o nome ${studentName}. Revise e clique em Enviar Template.`
+              `${templateName} preenchido com o nome ${studentName}. Revise e clique em Enviar Template.`
             );
           } else {
             showToast(
-              "Template inauguração detectado, mas não consegui preencher o nome automaticamente. Confira antes de enviar."
+              `${templateName} detectado, mas não consegui preencher o nome automaticamente. Confira antes de enviar.`
             );
           }
 
@@ -1405,7 +1423,7 @@
       }
 
       showToast(
-        "Nome e telefone preenchidos. Se escolher o template inauguracao_26fitt, o nome do aluno será preenchido automaticamente."
+        "Nome e telefone preenchidos. Nos templates de saudação e inauguração, o nome do aluno será preenchido automaticamente."
       );
       return;
     }
@@ -1414,7 +1432,7 @@
       if (finished) return;
 
       if (initialLeadFilled) {
-        if (fillInaugurationTemplateVariable()) return;
+        if (fillNameOnlyTemplateVariable()) return;
 
         if (billingTemplateExpected()) {
           if (fillBillingTemplateVariables()) return;
@@ -1426,7 +1444,7 @@
         }
 
         showToast(
-          "Aguardando seleção de template. No inauguracao_26fitt, o nome será preenchido automaticamente."
+          "Aguardando seleção de template. Em iniciar__conversa_oi e inauguracao_26fitt, a variável 1 recebe o nome automaticamente."
         );
         return;
       }
