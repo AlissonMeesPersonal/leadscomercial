@@ -2479,3 +2479,659 @@ html[data-theme="light"] .executive-hero-highlight {
     border-color: #e0e0db !important;
   }
 }
+
+
+/* Relatório executivo v2 - layout corporativo da Rede 26Fit */
+.executive-grid-full {
+  grid-column: 1 / -1;
+}
+
+.executive-day-snapshot {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 10px;
+  padding: 18px 20px 20px;
+}
+
+.executive-day-snapshot > div {
+  display: grid;
+  gap: 5px;
+  padding: 13px 14px;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  background: var(--bg-soft);
+}
+
+.executive-day-snapshot span {
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.executive-day-snapshot strong {
+  font-size: 18px;
+}
+
+.executive-print-page-header {
+  display: none;
+}
+
+.executive-print-brand {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.executive-print-brand strong {
+  font-size: 18px;
+  letter-spacing: -.04em;
+}
+
+.executive-print-brand strong span {
+  color: var(--primary);
+}
+
+.executive-print-brand small {
+  color: var(--muted);
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: .08em;
+}
+
+@media (max-width: 1250px) {
+  .executive-day-snapshot {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 700px) {
+  .executive-day-snapshot {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media print {
+  @page {
+    size: A4 landscape;
+    margin: 8mm;
+  }
+
+  html,
+  body {
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+    color: #161616 !important;
+  }
+
+  body {
+    font-family: Arial, Helvetica, sans-serif !important;
+  }
+
+  .executive-report {
+    width: 100% !important;
+    max-width: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    background: #ffffff !important;
+  }
+
+  /* A interface do navegador não faz parte do documento. */
+  .executive-report-header,
+  .executive-network-strip,
+  .no-print,
+  .theme-toggle,
+  .executive-report-actions {
+    display: none !important;
+  }
+
+  .print-only,
+  .executive-print-page-header {
+    display: flex !important;
+  }
+
+  /* Capa: ocupa uma única página, sem gerar a página branca observada antes. */
+  .executive-print-cover {
+    display: flex !important;
+    flex-direction: column;
+    height: 190mm !important;
+    min-height: 0 !important;
+    box-sizing: border-box !important;
+    padding: 14mm 16mm 12mm !important;
+    margin: 0 !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    color: #ffffff !important;
+    background:
+      linear-gradient(115deg, #101114 0%, #15171b 68%, #1d120b 100%) !important;
+    page-break-after: always !important;
+    break-after: page !important;
+    overflow: hidden !important;
+  }
+
+  .executive-print-cover::before {
+    width: 78mm !important;
+    height: 78mm !important;
+    right: -28mm !important;
+    top: -23mm !important;
+    background: rgba(255, 106, 0, .12) !important;
+  }
+
+  .executive-print-cover::after {
+    left: 16mm !important;
+    right: 16mm !important;
+    bottom: 21mm !important;
+    background: rgba(255,255,255,.13) !important;
+  }
+
+  .executive-print-cover-top {
+    min-height: 16mm;
+  }
+
+  .executive-brand-mark-large {
+    font-size: 34px !important;
+    font-weight: 950 !important;
+    color: #ffffff !important;
+  }
+
+  .executive-brand-mark-large span {
+    color: #ff6a00 !important;
+  }
+
+  .executive-print-cover-top > div:last-child strong {
+    color: #ffffff !important;
+    font-size: 9px !important;
+    letter-spacing: .18em !important;
+  }
+
+  .executive-print-cover-top > div:last-child span {
+    color: #9ca1aa !important;
+    font-size: 9px !important;
+  }
+
+  .executive-print-cover-main {
+    margin-top: 24mm !important;
+    max-width: 205mm !important;
+  }
+
+  .executive-print-cover-main p {
+    color: #ff6a00 !important;
+    font-size: 9px !important;
+    font-weight: 900 !important;
+    letter-spacing: .16em !important;
+    margin-bottom: 6mm !important;
+  }
+
+  .executive-print-cover-main h2 {
+    max-width: 175mm !important;
+    color: #ffffff !important;
+    font-size: 31px !important;
+    line-height: 1.04 !important;
+    letter-spacing: -.025em !important;
+  }
+
+  .executive-print-cover-main > span {
+    margin-top: 5mm !important;
+    color: #c8cbd0 !important;
+    font-size: 13px !important;
+  }
+
+  .executive-print-cover-grid {
+    margin-top: auto !important;
+    margin-bottom: 23mm !important;
+    grid-template-columns: 1.5fr .8fr .8fr 1.3fr !important;
+    gap: 3mm !important;
+  }
+
+  .executive-print-cover-grid > div {
+    min-height: 22mm !important;
+    padding: 4mm !important;
+    border: 1px solid rgba(255,255,255,.10) !important;
+    border-radius: 2.5mm !important;
+    background: rgba(255,255,255,.045) !important;
+  }
+
+  .executive-print-cover-grid span {
+    color: #8f949d !important;
+    font-size: 7px !important;
+    letter-spacing: .09em !important;
+  }
+
+  .executive-print-cover-grid strong {
+    color: #ffffff !important;
+    font-size: 10px !important;
+    line-height: 1.3 !important;
+  }
+
+  .executive-print-cover-footer {
+    left: 16mm !important;
+    right: 16mm !important;
+    bottom: 10mm !important;
+    color: #8f949d !important;
+    font-size: 7px !important;
+  }
+
+  .executive-print-cover-footer strong {
+    color: #ff6a00 !important;
+    font-size: 8px !important;
+  }
+
+  /* Cabeçalho interno das páginas do relatório. */
+  .executive-print-page-header {
+    grid-column: 1 / -1 !important;
+    width: 100% !important;
+    min-height: 12mm;
+    box-sizing: border-box;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 0 0 3.5mm !important;
+    margin: 0 0 5mm !important;
+    border-bottom: 1.5px solid #ff6a00 !important;
+  }
+
+  .executive-print-brand strong {
+    color: #151515 !important;
+    font-size: 17px !important;
+    font-weight: 950 !important;
+  }
+
+  .executive-print-brand strong span {
+    color: #ff6a00 !important;
+  }
+
+  .executive-print-brand small {
+    color: #717171 !important;
+    font-size: 7px !important;
+  }
+
+  .executive-print-page-header > span {
+    color: #666 !important;
+    font-size: 8px !important;
+    font-weight: 800 !important;
+    letter-spacing: .08em !important;
+  }
+
+  /* Fluxo de páginas: capa + resumo + operação + rede/detalhe. */
+  .executive-print-page-start {
+    page-break-before: auto !important;
+    break-before: auto !important;
+  }
+
+  .executive-overview-page {
+    min-height: 0 !important;
+    height: 190mm !important;
+    box-sizing: border-box !important;
+    display: block !important;
+    page-break-after: always !important;
+    break-after: page !important;
+    margin: 0 !important;
+  }
+
+  .executive-operations-page {
+    min-height: 190mm !important;
+    box-sizing: border-box !important;
+    align-content: start !important;
+    page-break-after: always !important;
+    break-after: page !important;
+    margin: 0 !important;
+  }
+
+  .executive-evolution-page {
+    page-break-before: always !important;
+    break-before: page !important;
+    min-height: 150mm !important;
+  }
+
+  .executive-network-page {
+    min-height: auto !important;
+    box-sizing: border-box !important;
+    margin: 0 0 5mm !important;
+  }
+
+  .executive-detail-page {
+    page-break-before: auto !important;
+    break-before: auto !important;
+    margin-top: 5mm !important;
+  }
+
+  /* Visual executivo: menos laranja, mais contraste e espaço em branco. */
+  .executive-hero {
+    grid-template-columns: 1.45fr .55fr !important;
+    min-height: 54mm !important;
+    padding: 7mm !important;
+    gap: 6mm !important;
+    margin: 0 0 5mm !important;
+    border: 0 !important;
+    border-radius: 3mm !important;
+    background: #15171b !important;
+    color: #ffffff !important;
+    box-shadow: none !important;
+  }
+
+  .executive-hero-copy > span {
+    color: #ff6a00 !important;
+    font-size: 7px !important;
+    letter-spacing: .14em !important;
+  }
+
+  .executive-hero-copy h2 {
+    color: #ffffff !important;
+    font-size: 24px !important;
+    line-height: 1.07 !important;
+    margin-top: 2mm !important;
+  }
+
+  .executive-hero-copy p {
+    max-width: 150mm !important;
+    color: #b7bbc1 !important;
+    font-size: 9px !important;
+    line-height: 1.5 !important;
+  }
+
+  .executive-hero-highlight {
+    min-height: auto !important;
+    padding: 5mm !important;
+    border: 1px solid #34373d !important;
+    border-left: 3px solid #ff6a00 !important;
+    border-radius: 2.5mm !important;
+    background: #202228 !important;
+    color: #ffffff !important;
+  }
+
+  .executive-hero-highlight span {
+    color: #aeb2b9 !important;
+    font-size: 8px !important;
+  }
+
+  .executive-hero-highlight strong {
+    color: #ffffff !important;
+    font-size: 28px !important;
+  }
+
+  .executive-hero-highlight small {
+    color: #aeb2b9 !important;
+    font-size: 8px !important;
+  }
+
+  .executive-kpis {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    gap: 3mm !important;
+    margin: 0 !important;
+  }
+
+  .executive-kpis article {
+    min-height: 27mm !important;
+    box-sizing: border-box !important;
+    padding: 4mm !important;
+    border: 1px solid #deded9 !important;
+    border-top: 2px solid #ff6a00 !important;
+    border-radius: 2.5mm !important;
+    background: #ffffff !important;
+    box-shadow: none !important;
+  }
+
+  .executive-kpis span {
+    color: #777 !important;
+    font-size: 7px !important;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+  }
+
+  .executive-kpis strong {
+    color: #181818 !important;
+    font-size: 18px !important;
+    margin-top: 1mm !important;
+  }
+
+  .executive-kpis small {
+    color: #777 !important;
+    font-size: 7px !important;
+    margin-top: 1mm !important;
+  }
+
+  .executive-grid {
+    gap: 4mm !important;
+  }
+
+  .executive-card {
+    border: 1px solid #ddddda !important;
+    border-radius: 3mm !important;
+    background: #ffffff !important;
+    box-shadow: none !important;
+    overflow: hidden !important;
+  }
+
+  .executive-card-heading {
+    min-height: 16mm !important;
+    box-sizing: border-box !important;
+    padding: 4mm 5mm !important;
+    border-bottom: 1px solid #e3e3df !important;
+    background: #fbfbfa !important;
+  }
+
+  .executive-card-heading > div > span {
+    color: #ff6a00 !important;
+    font-size: 6.5px !important;
+    letter-spacing: .12em !important;
+  }
+
+  .executive-card-heading h3 {
+    color: #191919 !important;
+    font-size: 14px !important;
+    margin-top: 1mm !important;
+  }
+
+  .executive-card-heading > small {
+    color: #777 !important;
+    font-size: 7px !important;
+  }
+
+  .executive-funnel {
+    gap: 2.2mm !important;
+    padding: 4mm 5mm 5mm !important;
+  }
+
+  .executive-funnel-step {
+    grid-template-columns: 7mm 40mm 1fr !important;
+    gap: 3mm !important;
+  }
+
+  .executive-funnel-step > span {
+    width: 6mm !important;
+    height: 6mm !important;
+    font-size: 7px !important;
+    color: #ff6a00 !important;
+    background: #fff1e8 !important;
+  }
+
+  .executive-funnel-step strong,
+  .executive-funnel-step b {
+    color: #1a1a1a !important;
+    font-size: 8px !important;
+  }
+
+  .executive-funnel-track,
+  .executive-bar-track {
+    background: #ededeb !important;
+  }
+
+  .executive-funnel-track {
+    height: 2.2mm !important;
+  }
+
+  .executive-funnel-track i,
+  .executive-bar-track span {
+    background: #ff6a00 !important;
+  }
+
+  .executive-bar-chart {
+    gap: 3mm !important;
+    padding: 5mm !important;
+  }
+
+  .executive-bar-row {
+    grid-template-columns: 35mm 1fr 22mm !important;
+    gap: 3mm !important;
+  }
+
+  .executive-bar-label strong {
+    color: #1c1c1c !important;
+    font-size: 8px !important;
+  }
+
+  .executive-bar-label span {
+    color: #777 !important;
+    font-size: 6.5px !important;
+  }
+
+  .executive-bar-track {
+    height: 2.5mm !important;
+  }
+
+  .executive-bar-row > b {
+    color: #1c1c1c !important;
+    font-size: 8px !important;
+  }
+
+  .executive-day-snapshot {
+    grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
+    gap: 2.5mm !important;
+    padding: 4mm 5mm 5mm !important;
+  }
+
+  .executive-day-snapshot > div {
+    min-height: 20mm !important;
+    box-sizing: border-box !important;
+    padding: 3.5mm !important;
+    border: 1px solid #e0e0dc !important;
+    border-radius: 2mm !important;
+    background: #f7f7f5 !important;
+  }
+
+  .executive-day-snapshot span {
+    color: #777 !important;
+    font-size: 6.5px !important;
+  }
+
+  .executive-day-snapshot strong {
+    color: #171717 !important;
+    font-size: 14px !important;
+  }
+
+  .executive-trend-wrap {
+    padding: 5mm !important;
+  }
+
+  .executive-trend-svg {
+    min-height: 90mm !important;
+    max-height: 100mm !important;
+  }
+
+  .trend-line {
+    stroke: #ff6a00 !important;
+    stroke-width: 3 !important;
+  }
+
+  .trend-dot {
+    fill: #ffffff !important;
+    stroke: #ff6a00 !important;
+  }
+
+  .trend-label {
+    fill: #6d6d6a !important;
+    font-size: 9px !important;
+  }
+
+  .executive-trend-legend {
+    gap: 2mm !important;
+  }
+
+  .executive-trend-legend > div {
+    padding: 2.5mm !important;
+    border-radius: 2mm !important;
+    background: #f5f5f2 !important;
+  }
+
+  .executive-insights {
+    grid-template-columns: repeat(3, 1fr) !important;
+    gap: 2.5mm !important;
+    padding: 4mm !important;
+  }
+
+  .executive-insights > div {
+    padding: 4mm !important;
+    border: 1px solid #dededa !important;
+    border-radius: 2mm !important;
+    background: #f7f7f5 !important;
+  }
+
+  .executive-insights span {
+    color: #777 !important;
+    font-size: 6.5px !important;
+  }
+
+  .executive-insights strong {
+    color: #171717 !important;
+    font-size: 18px !important;
+  }
+
+  .executive-insights p {
+    color: #666 !important;
+    font-size: 7px !important;
+    line-height: 1.45 !important;
+  }
+
+  .executive-table-card {
+    margin-bottom: 0 !important;
+  }
+
+  .executive-table-wrap {
+    overflow: visible !important;
+  }
+
+  .executive-table {
+    min-width: 0 !important;
+    width: 100% !important;
+    table-layout: fixed !important;
+  }
+
+  .executive-table th,
+  .executive-table td {
+    padding: 2.4mm 2mm !important;
+    font-size: 6.5px !important;
+    white-space: normal !important;
+    word-break: normal !important;
+    line-height: 1.25 !important;
+    border-color: #e3e3df !important;
+  }
+
+  .executive-table th {
+    background: #17191d !important;
+    color: #ffffff !important;
+    font-size: 6px !important;
+    letter-spacing: .04em !important;
+  }
+
+  .executive-table tbody tr:nth-child(even) td {
+    background: #f7f7f5 !important;
+  }
+
+  .executive-table td.positive {
+    color: #17764a !important;
+    font-weight: 800 !important;
+  }
+
+  .executive-report-footer {
+    display: flex !important;
+    margin-top: 4mm !important;
+    padding: 3mm 0 0 !important;
+    border-top: 1px solid #d8d8d4 !important;
+    color: #7a7a76 !important;
+    font-size: 6.5px !important;
+    page-break-inside: avoid !important;
+  }
+
+  .executive-report-footer strong {
+    color: #3a3a38 !important;
+  }
+}
