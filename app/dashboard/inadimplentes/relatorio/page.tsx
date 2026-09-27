@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "next/navigation";
 import ThemeToggle from "../../../components/ThemeToggle";
 
 type SessionInfo = {
@@ -234,8 +233,10 @@ function TrendChart({
 }
 
 export default function DelinquentExecutiveReportPage() {
-  const searchParams = useSearchParams();
   const [session, setSession] = useState<SessionInfo | null>(null);
+  const [unitFilter, setUnitFilter] = useState("Todas");
+  const [ownerFilter, setOwnerFilter] = useState("Todos");
+  const [dateFilter, setDateFilter] = useState("");
   const [batches, setBatches] = useState<Batch[]>([]);
   const [items, setItems] = useState<DelinquentItem[]>([]);
   const [leads, setLeads] = useState<Lead[]>([]);
@@ -245,11 +246,12 @@ export default function DelinquentExecutiveReportPage() {
   const [notice, setNotice] = useState("");
   const [presentationMode, setPresentationMode] = useState(false);
 
-  const unitFilter = searchParams.get("unit") || "Todas";
-  const ownerFilter = searchParams.get("owner") || "Todos";
-  const dateFilter = searchParams.get("date") || "";
-
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    setUnitFilter(params.get("unit") || "Todas");
+    setOwnerFilter(params.get("owner") || "Todos");
+    setDateFilter(params.get("date") || "");
+
     async function load() {
       if (!sessionStorage.getItem(COMMERCIAL_ACCESS_KEY)) {
         location.href = "/login";
