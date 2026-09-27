@@ -81,3 +81,11 @@ Depois de atualizar os arquivos, abra `chrome://extensions` e clique em **Recarr
   - `inauguracao_26fitt`
   - `iniciar__conversa_oi`
 - O envio do template continua manual após a conferência da pré-visualização.
+
+
+### Atualização 2.7.5
+- Corrige perda de estado quando o Scale troca da tela de Nova Conversa para `/chat-unidades`.
+- O conector salva a etapa `template` no storage após preencher nome e telefone.
+- Templates suportados passam a ter prioridade de detecção mesmo depois de reconstrução/reload da página.
+- `iniciar__conversa_oi` continua preenchendo {{1}} com o nome do aluno.
+- Adicionado fallback seguro para modal com uma única variável e prévia de saudação `Oi/Olá {{1}}`.
