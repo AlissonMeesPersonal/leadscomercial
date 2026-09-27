@@ -3135,3 +3135,713 @@ html[data-theme="light"] .executive-hero-highlight {
     color: #3a3a38 !important;
   }
 }
+
+
+/* PDF premium preto - identidade oficial 26Fit */
+.executive-logo {
+  display: block;
+  width: 100%;
+  height: auto;
+  object-fit: contain;
+}
+
+.executive-logo-shell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #ffffff;
+  border-radius: 10px;
+  padding: 5px 10px;
+  flex: 0 0 auto;
+}
+
+.executive-logo-header {
+  width: 88px;
+  max-height: 46px;
+}
+
+.executive-logo-shell-cover {
+  width: 46mm;
+  min-height: 21mm;
+  box-sizing: border-box;
+  border-radius: 3mm;
+  padding: 2.5mm 4mm;
+}
+
+.executive-logo-cover {
+  max-height: 16mm;
+}
+
+.executive-logo-shell-page {
+  width: 29mm;
+  min-height: 12mm;
+  box-sizing: border-box;
+  border-radius: 2mm;
+  padding: 1.5mm 2.5mm;
+}
+
+.executive-logo-page {
+  max-height: 9mm;
+}
+
+/* A própria página do relatório passa a seguir a identidade escura do Portal. */
+.executive-report {
+  background:
+    radial-gradient(circle at 90% 0%, rgba(255, 106, 0, .08), transparent 26%),
+    #08090a;
+  color: #f4f4f4;
+  min-height: 100vh;
+}
+
+.executive-report .executive-report-header,
+.executive-report .executive-card,
+.executive-report .executive-kpis article,
+.executive-report .executive-batches-panel,
+.executive-report .executive-detail-panel {
+  background: #101113;
+  border-color: #27292d;
+}
+
+.executive-report .executive-card-heading,
+.executive-report .executive-insights > div,
+.executive-report .executive-day-snapshot > div,
+.executive-report .executive-trend-legend > div {
+  background: #151619;
+  border-color: #2a2c30;
+}
+
+.executive-report .executive-card-heading h3,
+.executive-report .executive-kpis strong,
+.executive-report .executive-insights strong,
+.executive-report .executive-day-snapshot strong,
+.executive-report .executive-table td {
+  color: #f6f6f6;
+}
+
+.executive-report .executive-card-heading > small,
+.executive-report .executive-kpis span,
+.executive-report .executive-kpis small,
+.executive-report .executive-insights span,
+.executive-report .executive-insights p,
+.executive-report .executive-day-snapshot span {
+  color: #96999f;
+}
+
+.executive-report .executive-bar-track,
+.executive-report .executive-funnel-track {
+  background: #24262a;
+}
+
+.executive-report .executive-table th {
+  background: #050506;
+  color: #f4f4f4;
+}
+
+.executive-report .executive-table th,
+.executive-report .executive-table td {
+  border-color: #292b2f;
+}
+
+.executive-report .executive-table tbody tr:nth-child(even) td {
+  background: #131416;
+}
+
+.executive-report .executive-table tbody tr:nth-child(odd) td {
+  background: #0e0f11;
+}
+
+@media print {
+  @page {
+    size: A4 landscape;
+    margin: 0;
+  }
+
+  html,
+  body {
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #050506 !important;
+    color: #f7f7f7 !important;
+  }
+
+  .executive-report {
+    width: 297mm !important;
+    max-width: 297mm !important;
+    min-height: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    background: #050506 !important;
+    color: #f7f7f7 !important;
+  }
+
+  .executive-report-header,
+  .executive-network-strip,
+  .no-print,
+  .theme-toggle,
+  .executive-report-actions {
+    display: none !important;
+  }
+
+  .print-only {
+    display: flex !important;
+  }
+
+  /* Cada bloco abaixo corresponde a uma página física do PDF. */
+  .executive-print-cover,
+  .executive-overview-page,
+  .executive-operations-page,
+  .executive-evolution-page,
+  .executive-network-page,
+  .executive-detail-page {
+    width: 297mm !important;
+    height: 210mm !important;
+    min-height: 210mm !important;
+    max-height: 210mm !important;
+    box-sizing: border-box !important;
+    overflow: hidden !important;
+    margin: 0 !important;
+    padding: 12mm 15mm 11mm !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background:
+      radial-gradient(circle at 92% 4%, rgba(255, 106, 0, .12), transparent 26%),
+      linear-gradient(145deg, #090a0b 0%, #050506 100%) !important;
+    color: #f7f7f7 !important;
+    break-after: page !important;
+    page-break-after: always !important;
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  .executive-detail-page {
+    break-after: auto !important;
+    page-break-after: auto !important;
+  }
+
+  .executive-print-cover {
+    position: relative !important;
+    display: flex !important;
+    flex-direction: column !important;
+  }
+
+  .executive-print-cover::before {
+    content: "" !important;
+    position: absolute !important;
+    width: 108mm !important;
+    height: 108mm !important;
+    right: -35mm !important;
+    top: -42mm !important;
+    border-radius: 50% !important;
+    background: rgba(255, 106, 0, .10) !important;
+  }
+
+  .executive-print-cover::after {
+    content: "" !important;
+    position: absolute !important;
+    left: 15mm !important;
+    right: 15mm !important;
+    bottom: 23mm !important;
+    height: 1px !important;
+    background: #2c2e32 !important;
+  }
+
+  .executive-print-cover-top {
+    display: flex !important;
+    align-items: center !important;
+    gap: 5mm !important;
+    position: relative !important;
+    z-index: 2 !important;
+  }
+
+  .executive-print-cover-top > div:last-child {
+    display: grid !important;
+    gap: 1mm !important;
+  }
+
+  .executive-print-cover-top > div:last-child strong {
+    color: #ffffff !important;
+    font-size: 10px !important;
+    letter-spacing: .16em !important;
+  }
+
+  .executive-print-cover-top > div:last-child span {
+    color: #8f939a !important;
+    font-size: 8px !important;
+  }
+
+  .executive-print-cover-main {
+    margin-top: 27mm !important;
+    max-width: 188mm !important;
+    position: relative !important;
+    z-index: 2 !important;
+  }
+
+  .executive-print-cover-main p {
+    color: #ff6a00 !important;
+    font-size: 9px !important;
+    font-weight: 900 !important;
+    letter-spacing: .18em !important;
+    margin: 0 0 6mm !important;
+  }
+
+  .executive-print-cover-main h2 {
+    color: #ffffff !important;
+    font-size: 34px !important;
+    line-height: 1.02 !important;
+    letter-spacing: -.035em !important;
+    margin: 0 !important;
+  }
+
+  .executive-print-cover-main > span {
+    display: block !important;
+    color: #afb2b8 !important;
+    font-size: 13px !important;
+    margin-top: 5mm !important;
+  }
+
+  .executive-print-cover-grid {
+    margin-top: auto !important;
+    margin-bottom: 25mm !important;
+    display: grid !important;
+    grid-template-columns: 1.35fr .8fr .8fr 1.15fr !important;
+    gap: 3mm !important;
+    position: relative !important;
+    z-index: 2 !important;
+  }
+
+  .executive-print-cover-grid > div {
+    min-height: 23mm !important;
+    box-sizing: border-box !important;
+    padding: 4mm !important;
+    border: 1px solid #2b2d31 !important;
+    border-radius: 2.5mm !important;
+    background: #111214 !important;
+  }
+
+  .executive-print-cover-grid span {
+    color: #7e8289 !important;
+    font-size: 6.5px !important;
+    letter-spacing: .08em !important;
+    text-transform: uppercase !important;
+  }
+
+  .executive-print-cover-grid strong {
+    color: #f5f5f5 !important;
+    font-size: 10px !important;
+    line-height: 1.25 !important;
+  }
+
+  .executive-print-cover-footer {
+    position: absolute !important;
+    left: 15mm !important;
+    right: 15mm !important;
+    bottom: 10mm !important;
+    display: flex !important;
+    justify-content: space-between !important;
+    color: #73777e !important;
+    font-size: 7px !important;
+    z-index: 2 !important;
+  }
+
+  .executive-print-cover-footer strong {
+    color: #ff6a00 !important;
+    letter-spacing: .1em !important;
+  }
+
+  .executive-print-page-header {
+    display: flex !important;
+    width: 100% !important;
+    min-height: 15mm !important;
+    box-sizing: border-box !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    gap: 8mm !important;
+    padding: 0 0 4mm !important;
+    margin: 0 0 6mm !important;
+    border-bottom: 1px solid #292b2f !important;
+  }
+
+  .executive-print-page-header::after {
+    content: "" !important;
+    position: absolute !important;
+  }
+
+  .executive-print-brand {
+    display: flex !important;
+    align-items: center !important;
+    gap: 4mm !important;
+  }
+
+  .executive-print-brand small {
+    color: #7f838a !important;
+    font-size: 7px !important;
+    font-weight: 800 !important;
+    letter-spacing: .1em !important;
+  }
+
+  .executive-print-page-header > span {
+    color: #ff6a00 !important;
+    font-size: 8px !important;
+    font-weight: 900 !important;
+    letter-spacing: .1em !important;
+  }
+
+  /* Visão executiva */
+  .executive-overview-page {
+    display: block !important;
+  }
+
+  .executive-hero {
+    display: grid !important;
+    grid-template-columns: 1.42fr .58fr !important;
+    gap: 6mm !important;
+    min-height: 58mm !important;
+    box-sizing: border-box !important;
+    padding: 7mm !important;
+    margin: 0 0 5mm !important;
+    border: 1px solid #25272b !important;
+    border-radius: 3mm !important;
+    background: #0e0f11 !important;
+    color: #ffffff !important;
+  }
+
+  .executive-hero-copy > span {
+    color: #ff6a00 !important;
+    font-size: 7px !important;
+    font-weight: 900 !important;
+    letter-spacing: .15em !important;
+  }
+
+  .executive-hero-copy h2 {
+    color: #ffffff !important;
+    font-size: 24px !important;
+    line-height: 1.06 !important;
+    margin: 2mm 0 3mm !important;
+  }
+
+  .executive-hero-copy p {
+    color: #9fa3aa !important;
+    font-size: 8.5px !important;
+    line-height: 1.45 !important;
+    margin: 0 !important;
+  }
+
+  .executive-hero-highlight {
+    min-height: auto !important;
+    padding: 5mm !important;
+    border: 1px solid #2d3034 !important;
+    border-left: 2.5px solid #ff6a00 !important;
+    border-radius: 2mm !important;
+    background: #151619 !important;
+  }
+
+  .executive-hero-highlight span,
+  .executive-hero-highlight small {
+    color: #8e9299 !important;
+  }
+
+  .executive-hero-highlight strong {
+    color: #ffffff !important;
+    font-size: 27px !important;
+  }
+
+  .executive-kpis {
+    display: grid !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    gap: 3mm !important;
+    margin: 0 !important;
+  }
+
+  .executive-kpis article {
+    min-height: 31mm !important;
+    box-sizing: border-box !important;
+    padding: 4mm !important;
+    border: 1px solid #282a2e !important;
+    border-radius: 2mm !important;
+    background: #101113 !important;
+    box-shadow: none !important;
+  }
+
+  .executive-kpis article::before {
+    content: "" !important;
+    display: block !important;
+    width: 8mm !important;
+    height: 1.2mm !important;
+    margin-bottom: 3mm !important;
+    background: #ff6a00 !important;
+    border-radius: 99px !important;
+  }
+
+  .executive-kpis span {
+    color: #81858c !important;
+    font-size: 6.5px !important;
+    text-transform: uppercase !important;
+    letter-spacing: .06em !important;
+  }
+
+  .executive-kpis strong {
+    color: #ffffff !important;
+    font-size: 18px !important;
+    margin-top: 1.2mm !important;
+  }
+
+  .executive-kpis small {
+    color: #777b82 !important;
+    font-size: 6.5px !important;
+  }
+
+  /* Demais páginas */
+  .executive-grid {
+    gap: 4mm !important;
+  }
+
+  .executive-grid-two {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .executive-card {
+    border: 1px solid #27292d !important;
+    border-radius: 2.5mm !important;
+    background: #0f1012 !important;
+    box-shadow: none !important;
+    color: #f5f5f5 !important;
+  }
+
+  .executive-card-heading {
+    min-height: 17mm !important;
+    box-sizing: border-box !important;
+    padding: 4mm 5mm !important;
+    border-bottom: 1px solid #292b2f !important;
+    background: #121315 !important;
+  }
+
+  .executive-card-heading > div > span {
+    color: #ff6a00 !important;
+    font-size: 6.5px !important;
+    letter-spacing: .13em !important;
+  }
+
+  .executive-card-heading h3 {
+    color: #ffffff !important;
+    font-size: 14px !important;
+    margin: 1mm 0 0 !important;
+  }
+
+  .executive-card-heading > small {
+    color: #7d8188 !important;
+    font-size: 6.5px !important;
+  }
+
+  .executive-funnel {
+    gap: 2.5mm !important;
+    padding: 5mm !important;
+  }
+
+  .executive-funnel-step {
+    grid-template-columns: 7mm 42mm 1fr !important;
+    gap: 3mm !important;
+  }
+
+  .executive-funnel-step > span {
+    width: 6mm !important;
+    height: 6mm !important;
+    color: #ff6a00 !important;
+    background: #22160e !important;
+    border: 1px solid #5d3216 !important;
+    font-size: 7px !important;
+  }
+
+  .executive-funnel-step strong,
+  .executive-funnel-step b {
+    color: #f4f4f4 !important;
+    font-size: 8px !important;
+  }
+
+  .executive-funnel-track,
+  .executive-bar-track {
+    background: #24262a !important;
+  }
+
+  .executive-funnel-track i,
+  .executive-bar-track span {
+    background: #ff6a00 !important;
+  }
+
+  .executive-bar-chart {
+    gap: 3mm !important;
+    padding: 5mm !important;
+  }
+
+  .executive-bar-label strong,
+  .executive-bar-row > b {
+    color: #f3f3f3 !important;
+  }
+
+  .executive-bar-label span {
+    color: #7d8188 !important;
+  }
+
+  .executive-day-snapshot {
+    grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
+    gap: 2.5mm !important;
+    padding: 4mm 5mm 5mm !important;
+  }
+
+  .executive-day-snapshot > div {
+    min-height: 21mm !important;
+    box-sizing: border-box !important;
+    padding: 3.5mm !important;
+    border: 1px solid #292b2f !important;
+    border-radius: 2mm !important;
+    background: #151619 !important;
+  }
+
+  .executive-day-snapshot span {
+    color: #7d8188 !important;
+    font-size: 6.5px !important;
+  }
+
+  .executive-day-snapshot strong {
+    color: #ffffff !important;
+    font-size: 14px !important;
+  }
+
+  .executive-trend-wrap {
+    padding: 5mm !important;
+  }
+
+  .executive-trend-svg {
+    min-height: 105mm !important;
+    max-height: 112mm !important;
+  }
+
+  .trend-axis {
+    stroke: #303237 !important;
+  }
+
+  .trend-line {
+    stroke: #ff6a00 !important;
+  }
+
+  .trend-dot {
+    fill: #08090a !important;
+    stroke: #ff6a00 !important;
+  }
+
+  .trend-label {
+    fill: #8b8f96 !important;
+  }
+
+  .executive-trend-legend > div {
+    background: #131416 !important;
+    border: 1px solid #292b2f !important;
+  }
+
+  .executive-trend-legend span,
+  .executive-trend-legend small {
+    color: #7c8087 !important;
+  }
+
+  .executive-trend-legend strong {
+    color: #ffffff !important;
+  }
+
+  .executive-insights {
+    grid-template-columns: repeat(3, 1fr) !important;
+    gap: 2.5mm !important;
+    padding: 4mm !important;
+  }
+
+  .executive-insights > div {
+    padding: 4mm !important;
+    border: 1px solid #292b2f !important;
+    border-radius: 2mm !important;
+    background: #151619 !important;
+  }
+
+  .executive-insights span,
+  .executive-insights p {
+    color: #7e8289 !important;
+  }
+
+  .executive-insights strong {
+    color: #ffffff !important;
+  }
+
+  /* Rede e detalhamento ficam em páginas próprias e completas. */
+  .executive-network-page {
+    page-break-after: always !important;
+    break-after: page !important;
+  }
+
+  .executive-detail-page {
+    display: block !important;
+  }
+
+  .executive-detail-print-header {
+    display: flex !important;
+  }
+
+  .executive-detail-page > .executive-card-heading {
+    margin-top: 0 !important;
+  }
+
+  .executive-table-wrap {
+    overflow: hidden !important;
+  }
+
+  .executive-table {
+    width: 100% !important;
+    min-width: 0 !important;
+    table-layout: fixed !important;
+    border-collapse: collapse !important;
+  }
+
+  .executive-table th,
+  .executive-table td {
+    padding: 2.6mm 2mm !important;
+    border-bottom: 1px solid #282a2e !important;
+    font-size: 6.4px !important;
+    line-height: 1.25 !important;
+    white-space: normal !important;
+    color: #e9e9e9 !important;
+  }
+
+  .executive-table th {
+    background: #0b0c0d !important;
+    color: #ff6a00 !important;
+    font-size: 6px !important;
+    letter-spacing: .04em !important;
+  }
+
+  .executive-table tbody tr:nth-child(odd) td {
+    background: #101113 !important;
+  }
+
+  .executive-table tbody tr:nth-child(even) td {
+    background: #141517 !important;
+  }
+
+  .executive-table td.positive {
+    color: #48d597 !important;
+    font-weight: 800 !important;
+  }
+
+  .executive-report-footer {
+    position: absolute !important;
+    left: 15mm !important;
+    right: 15mm !important;
+    bottom: 7mm !important;
+    display: flex !important;
+    justify-content: space-between !important;
+    padding-top: 2.5mm !important;
+    border-top: 1px solid #25272b !important;
+    color: #70747b !important;
+    font-size: 6.5px !important;
+  }
+
+  .executive-report-footer strong {
+    color: #ff6a00 !important;
+    letter-spacing: .08em !important;
+  }
+}
