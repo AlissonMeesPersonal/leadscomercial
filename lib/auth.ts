@@ -1,6 +1,7 @@
 import { JWTPayload, SignJWT, jwtVerify } from "jose";
 
-const secret = new TextEncoder().encode(
+const SESSION_DURATION = "12h";
+const SESSION_SECRET = new TextEncoder().encode(
   process.env.SESSION_SECRET || "dev-only-change-this-secret"
 );
 
@@ -15,44 +16,57 @@ export type CommercialSession = {
   unitName: string | null;
 };
 
+function isCommercialRole(value: unknown): value is CommercialRole {
+  return value === "admin" || value === "commercial" || value === "user";
+}
+
+function sessionFromPayload(
+  payload: JWTPayload & Partial<CommercialSession>
+): CommercialSession | null {
+  if (
+    !payload.username ||
+    !payload.displayName ||
+    !payload.userId ||
+    !isCommercialRole(payload.role)
+  ) {
+    return null;
+  }
+
+  return {
+    username: payload.username,
+    displayName: payload.displayName,
+    role: payload.role,
+    userId: payload.userId,
+    unitId: payload.unitId ?? null,
+    unitName: payload.unitName ?? null
+  };
+}
+
 export async function createSession(session: CommercialSession) {
   return new SignJWT(session)
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
-    .setExpirationTime("12h")
-    .sign(secret);
+    .setExpirationTime(SESSION_DURATION)
+    .sign(SESSION_SECRET);
 }
 
-export async function getSession(token?: string): Promise<CommercialSession | null> {
-  if (!token) return null;
+export async function getSession(
+  token?: string
+): Promise<CommercialSession | null> {
+  if (!token) {
+    return null;
+  }
 
   try {
-    const { payload } = await jwtVerify(token, secret);
-    const data = payload as JWTPayload & Partial<CommercialSession>;
-
-    if (
-      !data.username ||
-      !data.displayName ||
-      !data.role ||
-      !data.userId ||
-      (data.role !== "admin" && data.role !== "commercial" && data.role !== "user")
-    ) {
-      return null;
-    }
-
-    return {
-      username: data.username,
-      displayName: data.displayName,
-      role: data.role,
-      userId: data.userId,
-      unitId: data.unitId ?? null,
-      unitName: data.unitName ?? null
-    };
+    const { payload } = await jwtVerify(token, SESSION_SECRET);
+    return sessionFromPayload(
+      payload as JWTPayload & Partial<CommercialSession>
+    );
   } catch {
     return null;
   }
 }
 
 export async function verifySession(token?: string) {
-  return Boolean(await getSession(token));
+  return (await getSession(token)) !== null;
 }
