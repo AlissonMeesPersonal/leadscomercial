@@ -153,6 +153,7 @@ function toDbLead(lead: Lead) {
     whatsapp: lead.whatsapp.trim() || null,
     email: lead.email.trim() || null,
     city: (lead.cidade || "").trim() || null,
+    unit_id: lead.unitId || null,
     source: lead.origem || "Importação",
     status: lead.status,
     demand_type: lead.tipo || "opportunity"
@@ -516,7 +517,7 @@ function inferCityFromSource(origem: string) {
   const rawFile = origem.split("•")[0]?.trim() || "";
   const withoutExtension = rawFile.replace(/\.[a-z0-9]+$/i, "");
   const normalized = normalizeHeader(withoutExtension)
-    .replace(/[_-]+/g, " ")
+    .replace(/[_]+/g, " ")
     .replace(/\s+/g, " ")
     .trim();
 
@@ -537,9 +538,93 @@ function inferCityFromSource(origem: string) {
   const generic = normalized.match(
     /^(?:contatos?|clientes?|base|lista|prospectos?|prospeccao)\s+(?:de\s+)?(.+)$/
   );
-  if (generic?.[1]) return cityTitleCase(generic[1]);
+  if (generic?.[1]) {
+    const value = generic[1]
+      .replace(/\b\d{1,2}\s*[-/.]\s*\d{1,2}(?:\s*[-/.]\s*\d{2,4})?\b.*$/, "")
+      .replace(/\b(?:manha|tarde|noite)\b.*$/, "")
+      .trim();
+
+    if (value) return cityTitleCase(value);
+  }
+
+  // Arquivos operacionais também podem vir apenas como:
+  // "SALDANHA 28-09 MANHÃ.xlsx", "RIO GRANDE 28-09.xlsx", etc.
+  const beforeDate = normalized
+    .replace(/\b\d{1,2}\s*[-/.]\s*\d{1,2}(?:\s*[-/.]\s*\d{2,4})?\b.*$/, "")
+    .replace(/\b(?:manha|tarde|noite)\b.*$/, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (beforeDate && !/^\d+$/.test(beforeDate)) {
+    return cityTitleCase(beforeDate);
+  }
 
   return "";
+}
+
+function unitSourceVariants(unit: UnitInfo) {
+  const values = [unit.name, unit.city];
+  const variants = new Set<string>();
+
+  for (const value of values) {
+    const normalized = normalizeHeader(value)
+      .replace(/[_-]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+
+    if (!normalized) continue;
+
+    variants.add(normalized);
+    variants.add(normalized.replace(/\s+(?:rs|sc|pr)$/i, "").trim());
+    variants.add(normalized.replace(/\s+do\s+sul$/i, "").trim());
+  }
+
+  return [...variants]
+    .filter((value) => value.length >= 4)
+    .sort((a, b) => b.length - a.length);
+}
+
+function resolveImportCity(origem: string, units: UnitInfo[]) {
+  const rawFile = origem.split("•")[0]?.trim() || "";
+  const normalizedSource = normalizeHeader(rawFile)
+    .replace(/[_-]+/g, " ")
+    .replace(/\.[a-z0-9]+$/i, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  const matchedUnit = units
+    .flatMap((unit) =>
+      unitSourceVariants(unit).map((variant) => ({
+        unit,
+        variant
+      }))
+    )
+    .sort((a, b) => b.variant.length - a.variant.length)
+    .find(({ variant }) => normalizedSource.includes(variant));
+
+  if (matchedUnit) {
+    return matchedUnit.unit.city || matchedUnit.unit.name;
+  }
+
+  return inferCityFromSource(origem);
+}
+
+function resolveUnitForCity(city: string, units: UnitInfo[]) {
+  const normalizedCity = normalizeHeader(city || "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (!normalizedCity) return null;
+
+  return (
+    units.find((unit) =>
+      [unit.name, unit.city].some(
+        (value) =>
+          normalizeHeader(value || "").replace(/\s+/g, " ").trim() ===
+          normalizedCity
+      )
+    ) || null
+  );
 }
 
 function localDateKey(value: string) {
@@ -846,8 +931,47 @@ export default function DashboardPage() {
     [units]
   );
 
+  const importedCityOptions = useMemo(() => {
+    const registeredCities = new Set(
+      units.flatMap((unit) => [unit.name, unit.city])
+        .map((value) => normalizeHeader(value || "").replace(/\s+/g, " ").trim())
+        .filter(Boolean)
+    );
+
+    const cities = new Map<string, string>();
+
+    for (const lead of tabLeads) {
+      if (!lead.cidade.trim()) continue;
+
+      const normalized = normalizeHeader(lead.cidade)
+        .replace(/\s+/g, " ")
+        .trim();
+
+      if (!normalized || registeredCities.has(normalized)) continue;
+      if (!cities.has(normalized)) cities.set(normalized, lead.cidade.trim());
+    }
+
+    return [...cities.entries()]
+      .map(([normalized, label]) => ({
+        value: `city:${normalized}`,
+        label
+      }))
+      .sort((a, b) => a.label.localeCompare(b.label, "pt-BR"));
+  }, [tabLeads, units]);
+
   const unitScopedLeads = useMemo(() => {
     if (unitFilter === "Todas") return tabLeads;
+
+    if (unitFilter.startsWith("city:")) {
+      const selectedCity = unitFilter.slice(5);
+
+      return tabLeads.filter(
+        (lead) =>
+          lead.cidade &&
+          normalizeHeader(lead.cidade).replace(/\s+/g, " ").trim() ===
+            selectedCity
+      );
+    }
 
     const selectedUnit = unitById.get(unitFilter);
 
@@ -1219,7 +1343,7 @@ export default function DashboardPage() {
     const fresh: Lead[] = [];
     const enrichById = new Map<
       string,
-      { id: string; whatsapp?: string; city?: string }
+      { id: string; whatsapp?: string; city?: string; unit_id?: string }
     >();
 
     for (const imported of items) {
@@ -1250,7 +1374,12 @@ export default function DashboardPage() {
         continue;
       }
 
-      const update: { id: string; whatsapp?: string; city?: string } = {
+      const update: {
+        id: string;
+        whatsapp?: string;
+        city?: string;
+        unit_id?: string;
+      } = {
         id: existing.id
       };
 
@@ -1265,7 +1394,11 @@ export default function DashboardPage() {
         update.city = imported.cidade.trim();
       }
 
-      if (update.whatsapp || update.city) {
+      if (!existing.unitId && imported.unitId) {
+        update.unit_id = imported.unitId;
+      }
+
+      if (update.whatsapp || update.city || update.unit_id) {
         enrichById.set(existing.id, {
           ...(enrichById.get(existing.id) || { id: existing.id }),
           ...update
@@ -1343,7 +1476,7 @@ export default function DashboardPage() {
     const parts: string[] = [];
 
     if (added) parts.push(`${added} registro(s) importado(s)`);
-    if (enriched) parts.push(`${enriched} atualizado(s) com telefone/cidade`);
+    if (enriched) parts.push(`${enriched} atualizado(s) com telefone/cidade/unidade`);
     if (skipped) parts.push(`${skipped} já existente(s)`);
 
     setNotice(parts.join(" · ") + ".");
@@ -1422,10 +1555,18 @@ export default function DashboardPage() {
         );
       }
 
-      imported = imported.map((lead) => ({
-        ...lead,
-        tipo: importTypeRef.current
-      }));
+      imported = imported.map((lead) => {
+        const resolvedCity =
+          lead.cidade.trim() || resolveImportCity(lead.origem, units);
+        const resolvedUnit = resolveUnitForCity(resolvedCity, units);
+
+        return {
+          ...lead,
+          cidade: resolvedUnit?.city || resolvedCity,
+          unitId: resolvedUnit?.id || lead.unitId || null,
+          tipo: importTypeRef.current
+        };
+      });
 
       await addImported(imported);
     } catch (err) {
@@ -1614,19 +1755,30 @@ export default function DashboardPage() {
   }
 
   const allUnitScopedLeads = useMemo(() => {
-    return unitFilter === "Todas"
-      ? leads
-      : leads.filter((lead) => {
-          const selectedUnit = unitById.get(unitFilter);
+    if (unitFilter === "Todas") return leads;
 
-          if (lead.unitId) return lead.unitId === unitFilter;
+    if (unitFilter.startsWith("city:")) {
+      const selectedCity = unitFilter.slice(5);
 
-          return Boolean(
-            selectedUnit &&
-              lead.cidade &&
-              normalizeHeader(lead.cidade) === normalizeHeader(selectedUnit.city)
-          );
-        });
+      return leads.filter(
+        (lead) =>
+          lead.cidade &&
+          normalizeHeader(lead.cidade).replace(/\s+/g, " ").trim() ===
+            selectedCity
+      );
+    }
+
+    return leads.filter((lead) => {
+      const selectedUnit = unitById.get(unitFilter);
+
+      if (lead.unitId) return lead.unitId === unitFilter;
+
+      return Boolean(
+        selectedUnit &&
+          lead.cidade &&
+          normalizeHeader(lead.cidade) === normalizeHeader(selectedUnit.city)
+      );
+    });
   }, [leads, unitFilter, unitById]);
 
   const opportunityCount = allUnitScopedLeads.filter(
@@ -1928,6 +2080,15 @@ export default function DashboardPage() {
                 {unit.name}
               </option>
             ))}
+            {importedCityOptions.length > 0 && (
+              <optgroup label="Cidades importadas">
+                {importedCityOptions.map((city) => (
+                  <option key={city.value} value={city.value}>
+                    {city.label}
+                  </option>
+                ))}
+              </optgroup>
+            )}
           </select>
 
           <input
