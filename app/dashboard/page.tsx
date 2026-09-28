@@ -111,7 +111,7 @@ function normalizeWhatsApp(value: string) {
   return digits;
 }
 
-function leadKey(
+function buildLeadKey(
   lead: Pick<Lead, "whatsapp" | "email" | "nome" | "cidade">
 ) {
   const phone = normalizeWhatsApp(lead.whatsapp);
@@ -131,7 +131,7 @@ function leadKey(
   return "";
 }
 
-function dbToLead(row: DbLead): Lead {
+function mapDbLead(row: DbLead): Lead {
   return {
     id: row.id,
     nome: row.name || "",
@@ -147,7 +147,7 @@ function dbToLead(row: DbLead): Lead {
   };
 }
 
-function toDbLead(lead: Lead) {
+function serializeLead(lead: Lead) {
   return {
     name: lead.nome.trim(),
     whatsapp: lead.whatsapp.trim() || null,
@@ -160,7 +160,7 @@ function toDbLead(lead: Lead) {
   };
 }
 
-function demandLabel(type: DemandType) {
+function getDemandLabel(type: DemandType) {
   if (type === "delinquent") return "Inadimplente";
   if (type === "inactive") return "Inativo";
   return "Oportunidade";
@@ -208,7 +208,7 @@ function normalizeHeader(value: string) {
     .trim();
 }
 
-function firstValue(row: Record<string, unknown>, keys: string[]) {
+function firstMatchingValue(row: Record<string, unknown>, keys: string[]) {
   const entries = Object.entries(row);
   const normalizedKeys = keys.map(normalizeHeader);
 
@@ -380,7 +380,7 @@ function extractLastContractStartFromRow(row: Record<string, unknown>) {
 }
 
 function extractEvoCustomerIdFromRow(row: Record<string, unknown>) {
-  return firstValue(row, [
+  return firstMatchingValue(row, [
     "id do cliente",
     "id cliente",
     "codigo do cliente",
@@ -389,11 +389,11 @@ function extractEvoCustomerIdFromRow(row: Record<string, unknown>) {
 }
 
 function extractSurnameFromRow(row: Record<string, unknown>) {
-  return firstValue(row, ["sobrenome", "last name", "lastname"]);
+  return firstMatchingValue(row, ["sobrenome", "last name", "lastname"]);
 }
 
 function extractLastContractDescriptionFromRow(row: Record<string, unknown>) {
-  return firstValue(row, [
+  return firstMatchingValue(row, [
     "descricao do ultimo contrato",
     "descrição do último contrato",
     "ultimo contrato",
@@ -666,11 +666,11 @@ function rowsToLeads(rows: Record<string, unknown>[], origem: string): Lead[] {
   return rows
     .map((row) => ({
       id: crypto.randomUUID(),
-      nome: firstValue(row, ["nome", "name", "cliente", "lead", "contato"]),
+      nome: firstMatchingValue(row, ["nome", "name", "cliente", "lead", "contato"]),
       whatsapp: extractPhoneFromRow(row),
-      email: firstValue(row, ["email", "e-mail", "mail"]),
+      email: firstMatchingValue(row, ["email", "e-mail", "mail"]),
       cidade:
-        firstValue(row, ["cidade", "municipio", "município", "city", "localidade"]) ||
+        firstMatchingValue(row, ["cidade", "municipio", "município", "city", "localidade"]) ||
         inferCityFromSource(origem),
       origem,
       status: "Novo" as Status,
@@ -813,7 +813,7 @@ export default function DashboardPage() {
 
         if (!cancelled) {
           setSessionInfo(session);
-          setLeads(leadRows.map(dbToLead));
+          setLeads(leadRows.map(mapDbLead));
           setOwners(ownerRows);
           setUnits(unitRows);
           setDelinquentBatches(batchRows);
@@ -872,7 +872,7 @@ export default function DashboardPage() {
         ]);
 
         if (!cancelled) {
-          setLeads(rows.map(dbToLead));
+          setLeads(rows.map(mapDbLead));
           setDelinquentBatches(batchRows);
           setDelinquentItems(
             delinquentItemRows.map((item) => ({
@@ -1118,7 +1118,7 @@ export default function DashboardPage() {
         lead.email,
         lead.cidade,
         lead.origem,
-        demandLabel(lead.tipo),
+        getDemandLabel(lead.tipo),
         ownerName
       ]
         .join(" ")
@@ -1167,7 +1167,7 @@ export default function DashboardPage() {
       delinquentItemResponse.json() as Promise<DelinquentItem[]>
     ]);
 
-    setLeads(leadRows.map(dbToLead));
+    setLeads(leadRows.map(mapDbLead));
     setDelinquentBatches(batchRows);
     setDelinquentItems(
       delinquentItemRows.map((item) => ({
@@ -1416,13 +1416,13 @@ export default function DashboardPage() {
         {
           method: "POST",
           body: JSON.stringify({
-            p_leads: fresh.map(toDbLead)
+            p_leads: fresh.map(serializeLead)
           })
         }
       );
 
       const savedRows = (await response.json()) as DbLead[];
-      const saved = savedRows.map(dbToLead);
+      const saved = savedRows.map(mapDbLead);
 
       added = saved.length;
       skipped += Math.max(0, fresh.length - saved.length);
@@ -1450,7 +1450,7 @@ export default function DashboardPage() {
 
       if (updatedRows.length) {
         const updates = new Map(
-          updatedRows.map((row) => [row.id, dbToLead(row)] as const)
+          updatedRows.map((row) => [row.id, mapDbLead(row)] as const)
         );
 
         setLeads((current) =>
@@ -1596,7 +1596,7 @@ export default function DashboardPage() {
         throw new Error("Registro não encontrado no banco.");
       }
 
-      const saved = dbToLead(rows[0]);
+      const saved = mapDbLead(rows[0]);
 
       setLeads((current) =>
         current.map((lead) => (lead.id === id ? saved : lead))
