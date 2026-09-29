@@ -19,7 +19,7 @@ const OPPORTUNITY_EVENTS = new Set([
   "crm.automation.prospect_campaign_landing_signup"
 ]);
 
-function deriveCommercialAccess(username: string, password: string) {
+function buildCommercialAccessToken(username: string, password: string) {
   return pbkdf2Sync(
     `${username}:${password}`,
     COMMERCIAL_ACCESS_SALT,
@@ -29,7 +29,7 @@ function deriveCommercialAccess(username: string, password: string) {
   ).toString("hex");
 }
 
-function getPath(value: JsonValue, path: string[]) {
+function readJsonPath(value: JsonValue, path: string[]) {
   let current: JsonValue = value;
 
   for (const segment of path) {
@@ -48,7 +48,7 @@ function getPath(value: JsonValue, path: string[]) {
   return current;
 }
 
-function scalarString(value: JsonValue) {
+function asScalarString(value: JsonValue) {
   if (
     typeof value === "string" ||
     typeof value === "number" ||
@@ -60,23 +60,23 @@ function scalarString(value: JsonValue) {
   return "";
 }
 
-function firstScalar(payload: JsonValue, paths: string[][]) {
+function firstAvailableValue(payload: JsonValue, paths: string[][]) {
   for (const path of paths) {
-    const value = scalarString(getPath(payload, path));
+    const value = asScalarString(readJsonPath(payload, path));
     if (value) return value;
   }
 
   return "";
 }
 
-function collectRoutingFields(
+function collectEvoRoutingFields(
   value: JsonValue,
   path = "",
   output: Record<string, JsonValue> = {}
 ) {
   if (Array.isArray(value)) {
     value.forEach((item, index) =>
-      collectRoutingFields(item, `${path}[${index}]`, output)
+      collectEvoRoutingFields(item, `${path}[${index}]`, output)
     );
     return output;
   }
@@ -110,20 +110,20 @@ function collectRoutingFields(
       output[currentPath] = child;
     }
 
-    collectRoutingFields(child, currentPath, output);
+    collectEvoRoutingFields(child, currentPath, output);
   }
 
   return output;
 }
 
-function collectUsefulFields(
+function collectLeadFields(
   value: JsonValue,
   path = "",
   output: Record<string, JsonValue> = {}
 ) {
   if (Array.isArray(value)) {
     value.slice(0, 10).forEach((item, index) =>
-      collectUsefulFields(item, `${path}[${index}]`, output)
+      collectLeadFields(item, `${path}[${index}]`, output)
     );
     return output;
   }
@@ -167,7 +167,7 @@ function collectUsefulFields(
       output[currentPath] = child;
     }
 
-    collectUsefulFields(child, currentPath, output);
+    collectLeadFields(child, currentPath, output);
   }
 
   return output;
@@ -194,34 +194,34 @@ export async function POST(request: Request) {
     );
   }
 
-  const eventType = firstScalar(payload, [["eventType"]]);
-  const eventLabel = firstScalar(payload, [["eventLabel"]]);
-  const eventDate = firstScalar(payload, [["eventDate"]]);
+  const eventType = firstAvailableValue(payload, [["eventType"]]);
+  const eventLabel = firstAvailableValue(payload, [["eventLabel"]]);
+  const eventDate = firstAvailableValue(payload, [["eventDate"]]);
 
-  const branchId = firstScalar(payload, [
+  const branchId = firstAvailableValue(payload, [
     ["organization", "idBranch"],
     ["organization", "branchId"],
     ["idBranch"],
     ["branchId"]
   ]);
 
-  const branchName = firstScalar(payload, [
+  const branchName = firstAvailableValue(payload, [
     ["organization", "branchName"],
     ["organization", "name"],
     ["branchName"]
   ]);
 
-  const fullName = firstScalar(payload, [
+  const fullName = firstAvailableValue(payload, [
     ["person", "fullName"],
     ["person", "name"]
   ]);
 
-  const firstName = firstScalar(payload, [["person", "firstName"]]);
-  const lastName = firstScalar(payload, [["person", "lastName"]]);
+  const firstName = firstAvailableValue(payload, [["person", "firstName"]]);
+  const lastName = firstAvailableValue(payload, [["person", "lastName"]]);
   const personName =
     fullName || [firstName, lastName].filter(Boolean).join(" ").trim();
 
-  const phone = firstScalar(payload, [
+  const phone = firstAvailableValue(payload, [
     ["person", "phone"],
     ["person", "mobilePhone"],
     ["person", "mobile"],
@@ -229,10 +229,10 @@ export async function POST(request: Request) {
     ["person", "whatsapp"]
   ]);
 
-  const email = firstScalar(payload, [["person", "email"]]);
+  const email = firstAvailableValue(payload, [["person", "email"]]);
 
-  const routing = collectRoutingFields(payload);
-  const useful = collectUsefulFields(payload);
+  const routing = collectEvoRoutingFields(payload);
+  const useful = collectLeadFields(payload);
 
   console.info(
     "[EVO WEBHOOK]",
@@ -266,7 +266,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const accessToken = deriveCommercialAccess(
+  const accessToken = buildCommercialAccessToken(
     commercialUser,
     commercialPassword
   );

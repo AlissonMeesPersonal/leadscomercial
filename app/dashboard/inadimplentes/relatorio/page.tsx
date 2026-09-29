@@ -92,15 +92,15 @@ async function supabaseRequest(path: string) {
   return response;
 }
 
-function num(value: number | string | null | undefined) {
+function numberValue(value: number | string | null | undefined) {
   const parsed = Number(value || 0);
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-function currency(value: number) {
+function formatCurrency(value: number) {
   return value.toLocaleString("pt-BR", {
-    style: "currency",
-    currency: "BRL"
+    style: "formatCurrency",
+    formatCurrency: "BRL"
   });
 }
 
@@ -116,7 +116,7 @@ function shortDate(value: string) {
   return `${match[3]}/${match[2]}`;
 }
 
-function pct(value: number) {
+function formatPercent(value: number) {
   return `${value.toFixed(1)}%`;
 }
 
@@ -223,8 +223,8 @@ function TrendChart({
         {data.map((row) => (
           <div key={row.label}>
             <span>{row.label}</span>
-            <strong>{currency(row.recovered)}</strong>
-            <small>{pct(row.rate)} recuperação</small>
+            <strong>{formatCurrency(row.recovered)}</strong>
+            <small>{formatPercent(row.rate)} recuperação</small>
           </div>
         ))}
       </div>
@@ -357,15 +357,15 @@ export default function DelinquentExecutiveReportPage() {
     return batches.map((batch) => {
       const rows = itemsByBatch.get(batch.id) || [];
       const initialBalance = rows.reduce(
-        (sum, item) => sum + num(item.initial_balance),
+        (sum, item) => sum + numberValue(item.initial_balance),
         0
       );
       const recoveredAmount = rows.reduce(
-        (sum, item) => sum + num(item.recovered_amount),
+        (sum, item) => sum + numberValue(item.recovered_amount),
         0
       );
       const paidContacts = rows.filter(
-        (item) => num(item.recovered_amount) > 0
+        (item) => numberValue(item.recovered_amount) > 0
       ).length;
       const fullyPaid = rows.filter(
         (item) => item.payment_status === "paid"
@@ -714,10 +714,10 @@ export default function DelinquentExecutiveReportPage() {
 
             <div className="executive-hero-highlight">
               <span>Valor recuperado</span>
-              <strong>{currency(totals.recoveredAmount)}</strong>
+              <strong>{formatCurrency(totals.recoveredAmount)}</strong>
               <small>
-                {pct(totals.recoveryRate)} do saldo inicial de{" "}
-                {currency(totals.initialBalance)}
+                {formatPercent(totals.recoveryRate)} do saldo inicial de{" "}
+                {formatCurrency(totals.initialBalance)}
               </small>
             </div>
           </section>
@@ -731,12 +731,12 @@ export default function DelinquentExecutiveReportPage() {
             <article>
               <span>Em contato</span>
               <strong>{totals.contacted}</strong>
-              <small>{pct(totals.contactRate)} da base</small>
+              <small>{formatPercent(totals.contactRate)} da base</small>
             </article>
             <article>
               <span>Com pagamento</span>
               <strong>{totals.paidContacts}</strong>
-              <small>{pct(totals.conversionRate)} de conversão</small>
+              <small>{formatPercent(totals.conversionRate)} de conversão</small>
             </article>
             <article>
               <span>Quitados</span>
@@ -745,12 +745,12 @@ export default function DelinquentExecutiveReportPage() {
             </article>
             <article>
               <span>Recuperado</span>
-              <strong>{currency(totals.recoveredAmount)}</strong>
-              <small>{pct(totals.recoveryRate)} do saldo</small>
+              <strong>{formatCurrency(totals.recoveredAmount)}</strong>
+              <small>{formatPercent(totals.recoveryRate)} do saldo</small>
             </article>
             <article>
               <span>Saldo aberto</span>
-              <strong>{currency(totals.openBalance)}</strong>
+              <strong>{formatCurrency(totals.openBalance)}</strong>
               <small>valor ainda pendente</small>
             </article>
           </section>
@@ -818,7 +818,7 @@ export default function DelinquentExecutiveReportPage() {
                   value: row.conversion,
                   helper: `${row.paid}/${row.total} pagaram`
                 }))}
-                valueLabel={(value) => pct(value)}
+                valueLabel={(value) => formatPercent(value)}
               />
             </article>
 
@@ -847,15 +847,15 @@ export default function DelinquentExecutiveReportPage() {
                   </div>
                   <div>
                     <span>Conversão</span>
-                    <strong>{pct(daily[0].conversion)}</strong>
+                    <strong>{formatPercent(daily[0].conversion)}</strong>
                   </div>
                   <div>
                     <span>Recuperado</span>
-                    <strong>{currency(daily[0].recovered)}</strong>
+                    <strong>{formatCurrency(daily[0].recovered)}</strong>
                   </div>
                   <div>
                     <span>Recuperação</span>
-                    <strong>{pct(daily[0].recovery)}</strong>
+                    <strong>{formatPercent(daily[0].recovery)}</strong>
                   </div>
                 </div>
               </article>
@@ -911,9 +911,9 @@ export default function DelinquentExecutiveReportPage() {
                 data={unitRanking.map((row) => ({
                   label: row.name,
                   value: row.recovered,
-                  helper: `${row.total} registros · ${pct(row.recoveryRate)} recuperado`
+                  helper: `${row.total} registros · ${formatPercent(row.recoveryRate)} recuperado`
                 }))}
-                valueLabel={(value) => currency(value)}
+                valueLabel={(value) => formatCurrency(value)}
               />
             </article>
 
@@ -928,7 +928,7 @@ export default function DelinquentExecutiveReportPage() {
               <div className="executive-insights">
                 <div>
                   <span>Taxa de contato</span>
-                  <strong>{pct(totals.contactRate)}</strong>
+                  <strong>{formatPercent(totals.contactRate)}</strong>
                   <p>
                     {totals.contacted} de {totals.total} registros já avançaram
                     além do status Novo.
@@ -936,17 +936,17 @@ export default function DelinquentExecutiveReportPage() {
                 </div>
                 <div>
                   <span>Conversão em pagamento</span>
-                  <strong>{pct(totals.conversionRate)}</strong>
+                  <strong>{formatPercent(totals.conversionRate)}</strong>
                   <p>
                     {totals.paidContacts} registros possuem valor recuperado.
                   </p>
                 </div>
                 <div>
                   <span>Recuperação financeira</span>
-                  <strong>{pct(totals.recoveryRate)}</strong>
+                  <strong>{formatPercent(totals.recoveryRate)}</strong>
                   <p>
-                    {currency(totals.recoveredAmount)} recuperados de{" "}
-                    {currency(totals.initialBalance)}.
+                    {formatCurrency(totals.recoveredAmount)} recuperados de{" "}
+                    {formatCurrency(totals.initialBalance)}.
                   </p>
                 </div>
               </div>
@@ -1013,12 +1013,12 @@ export default function DelinquentExecutiveReportPage() {
                         <td>{summary.total}</td>
                         <td>{summary.contacted}</td>
                         <td>{summary.paidContacts}</td>
-                        <td>{pct(summary.conversionRate)}</td>
-                        <td>{currency(summary.initialBalance)}</td>
+                        <td>{formatPercent(summary.conversionRate)}</td>
+                        <td>{formatCurrency(summary.initialBalance)}</td>
                         <td className="positive">
-                          {currency(summary.recoveredAmount)}
+                          {formatCurrency(summary.recoveredAmount)}
                         </td>
-                        <td>{currency(summary.openBalance)}</td>
+                        <td>{formatCurrency(summary.openBalance)}</td>
                       </tr>
                     ))}
 

@@ -1,8 +1,8 @@
 (() => {
-  const LEAD_KEY = "lc_pending_scale_lead";
+  const PENDING_LEAD_STORAGE_KEY = "lc_pending_scale_lead";
   const host = location.hostname;
 
-  const norm = (value) =>
+  const normalizeText = (value) =>
     String(value || "")
       .normalize("NFD")
       .replace(/[\u0300-\u036f]/g, "")
@@ -10,12 +10,12 @@
       .trim()
       .toLowerCase();
 
-  const digits = (value) => String(value || "").replace(/\D/g, "");
+  const keepOnlyDigits = (value) => String(value || "").replace(/\D/g, "");
 
-  const INIT_KEY = "__lc_scale_connector_v275__";
+  const CONNECTOR_INSTANCE_KEY = "__lc_scale_connector_v275__";
 
-  if (window[INIT_KEY]) return;
-  window[INIT_KEY] = true;
+  if (window[CONNECTOR_INSTANCE_KEY]) return;
+  window[CONNECTOR_INSTANCE_KEY] = true;
 
   if (host === "leadscomercial.vercel.app") {
     window.addEventListener("message", async (event) => {
@@ -28,8 +28,8 @@
       const payload = event.data.payload || {};
       const lead = {
         nome: String(payload.nome || "").trim(),
-        ddi: digits(payload.ddi || "55"),
-        phone: digits(payload.phone || ""),
+        ddi: keepOnlyDigits(payload.ddi || "55"),
+        phone: keepOnlyDigits(payload.phone || ""),
         unidade: String(payload.unidade || "").trim(),
         cobranca:
           payload.cobranca && typeof payload.cobranca === "object"
@@ -48,7 +48,7 @@
       if (!lead.phone) return;
 
       try {
-        await chrome.storage.local.set({ [LEAD_KEY]: lead });
+        await chrome.storage.local.set({ [PENDING_LEAD_STORAGE_KEY]: lead });
 
         const response = await new Promise((resolve) => {
           chrome.runtime.sendMessage(
@@ -98,14 +98,14 @@
 
   if (host !== "scale.26fit.com.br") return;
 
-  let stopActiveRun = null;
+  let stopCurrentAutomation = null;
 
-  function modalLooksOpen() {
-    const pageText = norm(document.body?.innerText || "");
+  function isNewConversationModalOpen() {
+    const pageText = normalizeText(document.body?.innerText || "");
     if (!pageText.includes("nova conversa")) return false;
 
     return Array.from(document.querySelectorAll("input")).some((input) => {
-      const hint = norm(
+      const hint = normalizeText(
         [
           input.getAttribute("placeholder"),
           input.getAttribute("aria-label"),
@@ -124,11 +124,11 @@
     });
   }
 
-  function runLead(inputLead) {
+  function startLeadFlow(inputLead) {
     const lead = {
       nome: String(inputLead?.nome || "").trim(),
-      ddi: digits(inputLead?.ddi || "55"),
-      phone: digits(inputLead?.phone || ""),
+      ddi: keepOnlyDigits(inputLead?.ddi || "55"),
+      phone: keepOnlyDigits(inputLead?.phone || ""),
       unidade: String(inputLead?.unidade || "").trim(),
       cobranca:
         inputLead?.cobranca && typeof inputLead.cobranca === "object"
@@ -146,13 +146,13 @@
 
     if (!lead.phone) return false;
 
-    if (typeof stopActiveRun === "function") {
+    if (typeof stopCurrentAutomation === "function") {
       try {
-        stopActiveRun();
+        stopCurrentAutomation();
       } catch {}
     }
 
-    stopActiveRun = startAutomation(lead);
+    stopCurrentAutomation = runScaleAutomation(lead);
     return true;
   }
 
@@ -160,13 +160,13 @@
     if (message?.type !== "LC_FILL_SCALE_LEAD") return;
 
     const lead = message.lead || {};
-    const modalOpen = modalLooksOpen();
+    const modalOpen = isNewConversationModalOpen();
 
     chrome.storage.local.set({
-      [LEAD_KEY]: {
+      [PENDING_LEAD_STORAGE_KEY]: {
         nome: String(lead.nome || "").trim(),
-        ddi: digits(lead.ddi || "55"),
-        phone: digits(lead.phone || ""),
+        ddi: keepOnlyDigits(lead.ddi || "55"),
+        phone: keepOnlyDigits(lead.phone || ""),
         unidade: String(lead.unidade || "").trim(),
         cobranca:
           lead.cobranca && typeof lead.cobranca === "object"
@@ -183,7 +183,7 @@
       }
     });
 
-    const ok = runLead({
+    const ok = startLeadFlow({
       ...lead,
       stage: String(lead.stage || "lead")
     });
@@ -194,20 +194,20 @@
     });
   });
 
-  chrome.storage.local.get([LEAD_KEY], (result) => {
-    const lead = result?.[LEAD_KEY];
+  chrome.storage.local.get([PENDING_LEAD_STORAGE_KEY], (result) => {
+    const lead = result?.[PENDING_LEAD_STORAGE_KEY];
 
     if (!lead?.phone) return;
 
     if (Date.now() - Number(lead.createdAt || 0) > 10 * 60 * 1000) {
-      chrome.storage.local.remove([LEAD_KEY]);
+      chrome.storage.local.remove([PENDING_LEAD_STORAGE_KEY]);
       return;
     }
 
-    runLead(lead);
+    startLeadFlow(lead);
   });
 
-  function startAutomation(lead) {
+  function runScaleAutomation(lead) {
     let finished = false;
     let initialLeadFilled = String(lead.stage || "") === "template";
     let templateHandled = false;
@@ -220,7 +220,7 @@
     let chatUnidadesClickedAt = 0;
     let unitClickedAt = 0;
 
-    function visible(el) {
+    function isVisible(el) {
       if (!el || !(el instanceof Element)) return false;
 
       const style = getComputedStyle(el);
@@ -234,7 +234,7 @@
       return rect.width > 2 && rect.height > 2;
     }
 
-    function roots() {
+    function getSearchRoots() {
       const found = [document];
       const queue = [document];
 
@@ -263,11 +263,11 @@
       return found;
     }
 
-    function all(selector) {
+    function queryAll(selector) {
       const output = [];
       const seen = new Set();
 
-      for (const root of roots()) {
+      for (const root of getSearchRoots()) {
         try {
           root.querySelectorAll(selector).forEach((el) => {
             if (!seen.has(el)) {
@@ -281,8 +281,8 @@
       return output;
     }
 
-    function textOf(el) {
-      return norm(
+    function elementText(el) {
+      return normalizeText(
         [
           el?.textContent,
           el?.getAttribute?.("aria-label"),
@@ -297,28 +297,28 @@
       );
     }
 
-    function findContains(selector, groups) {
+    function findByTextParts(selector, groups) {
       return (
-        all(selector).find((el) => {
-          if (!visible(el)) return false;
+        queryAll(selector).find((el) => {
+          if (!isVisible(el)) return false;
 
-          const text = textOf(el);
+          const text = elementText(el);
 
           return groups.some((group) =>
-            group.every((part) => text.includes(norm(part)))
+            group.every((part) => text.includes(normalizeText(part)))
           );
         }) || null
       );
     }
 
-    function exactText(text, selector = "span,div,p,strong,a,button,[role=button],[role=menuitem]") {
-      const wanted = norm(text);
+    function findExactText(text, selector = "span,div,p,strong,a,button,[role=button],[role=menuitem]") {
+      const wanted = normalizeText(text);
 
-      const matches = all(selector)
+      const matches = queryAll(selector)
         .filter((el) => {
-          if (!visible(el)) return false;
+          if (!isVisible(el)) return false;
 
-          const txt = norm(el.textContent);
+          const txt = normalizeText(el.textContent);
           return txt === wanted || txt.startsWith(wanted);
         })
         .map((el) => {
@@ -330,7 +330,7 @@
       return matches[0]?.el || null;
     }
 
-    function clickable(el) {
+    function getClickableTarget(el) {
       if (!el) return null;
 
       const direct = el.closest(
@@ -346,7 +346,7 @@
         parent && depth < 5;
         depth += 1, parent = parent.parentElement
       ) {
-        if (!visible(parent)) continue;
+        if (!isVisible(parent)) continue;
 
         try {
           if (getComputedStyle(parent).cursor === "pointer") return parent;
@@ -356,9 +356,9 @@
       return el;
     }
 
-    function safeClick(el, message, gap = 650) {
-      const target = clickable(el);
-      if (!target || !visible(target)) return false;
+    function clickSafely(el, message, gap = 650) {
+      const target = getClickableTarget(el);
+      if (!target || !isVisible(target)) return false;
 
       const now = Date.now();
       if (now - lastActionAt < gap) return false;
@@ -393,35 +393,35 @@
           );
         }
 
-        if (message) showToast(message);
+        if (message) showAutomationStatus(message);
         return true;
       } catch {
         return false;
       }
     }
 
-    function bestActionAncestor(el) {
+    function findBestActionTarget(el) {
       if (!el) return null;
 
       const candidates = [];
       let node = el;
 
       for (let depth = 0; node && depth < 8; depth += 1, node = node.parentElement) {
-        if (!visible(node)) continue;
+        if (!isVisible(node)) continue;
 
         const r = node.getBoundingClientRect();
         if (r.width < 40 || r.height < 24) continue;
 
         let score = 0;
-        const role = norm(node.getAttribute?.("role"));
-        const cls = norm(node.getAttribute?.("class"));
-        const testid = norm(node.getAttribute?.("data-testid"));
+        const role = normalizeText(node.getAttribute?.("role"));
+        const cls = normalizeText(node.getAttribute?.("class"));
+        const testid = normalizeText(node.getAttribute?.("data-testid"));
 
         if (node.matches?.("button,a,[role=button],[role=menuitem],[tabindex]")) score += 40;
         if (typeof node.onclick === "function") score += 35;
         if (role.includes("button") || role.includes("menuitem") || role.includes("option")) score += 30;
         if (testid.includes("unit") || testid.includes("unidade")) score += 20;
-        if (cls.includes("cursor-pointer") || cls.includes("clickable")) score += 18;
+        if (cls.includes("cursor-pointer") || cls.includes("getClickableTarget")) score += 18;
 
         try {
           if (getComputedStyle(node).cursor === "pointer") score += 25;
@@ -439,8 +439,8 @@
       return candidates[0]?.el || el;
     }
 
-    function coordinateClick(el) {
-      if (!el || !visible(el)) return false;
+    function clickAtElementCenter(el) {
+      if (!el || !isVisible(el)) return false;
 
       try {
         el.scrollIntoView({ block: "center", inline: "center" });
@@ -451,7 +451,7 @@
 
         if (!hit) return false;
 
-        const target = bestActionAncestor(hit);
+        const target = findBestActionTarget(hit);
         if (!target) return false;
 
         target.dispatchEvent(
@@ -476,7 +476,7 @@
       }
     }
 
-    function showToast(message) {
+    function showAutomationStatus(message) {
       if (message === lastMessage) return;
       lastMessage = message;
 
@@ -529,7 +529,7 @@
     }
 
     function sidebarChatIcon() {
-      const semantic = findContains(
+      const semantic = findByTextParts(
         "button,a,[role=button],[tabindex]",
         [["chat"], ["mensagem"], ["conversa"]]
       );
@@ -540,9 +540,9 @@
         if (r.left < 105 && r.top > 120 && r.top < 350) return semantic;
       }
 
-      const candidates = all("button,a,[role=button],[tabindex]")
+      const candidates = queryAll("button,a,[role=button],[tabindex]")
         .filter((el) => {
-          if (!visible(el)) return false;
+          if (!isVisible(el)) return false;
 
           const r = el.getBoundingClientRect();
 
@@ -573,8 +573,8 @@
 
     function chatUnidadesOption() {
       const exact =
-        exactText("Chat Unidades") ||
-        exactText("Chat por Unidade");
+        findExactText("Chat Unidades") ||
+        findExactText("Chat por Unidade");
 
       if (exact) {
         const r = exact.getBoundingClientRect();
@@ -582,7 +582,7 @@
         if (r.left < window.innerWidth * 0.45) return exact;
       }
 
-      return findContains(
+      return findByTextParts(
         "button,a,[role=button],[role=menuitem],[tabindex],span,div",
         [["chat", "unidades"], ["chat", "por", "unidade"]]
       );
@@ -590,7 +590,7 @@
 
     function unitPanelVisible() {
       return Boolean(
-        findContains("h1,h2,h3,strong,span,div,p", [
+        findByTextParts("h1,h2,h3,strong,span,div,p", [
           ["chat", "por", "unidade"],
           ["selecione", "unidade"],
           ["selecione", "uma", "unidade"]
@@ -599,7 +599,7 @@
     }
 
     function targetUnitVariants() {
-      const raw = norm(lead.unidade || "");
+      const raw = normalizeText(lead.unidade || "");
 
       if (!raw) return [];
 
@@ -620,13 +620,13 @@
       const variants = targetUnitVariants();
       if (!variants.length) return null;
 
-      const matches = all(
+      const matches = queryAll(
         "button,a,[role=button],[role=menuitem],[tabindex],div,span,p,strong"
       )
         .filter((el) => {
-          if (!visible(el)) return false;
+          if (!isVisible(el)) return false;
 
-          const text = norm(el.textContent);
+          const text = normalizeText(el.textContent);
           if (
             !variants.some(
               (variant) =>
@@ -648,7 +648,7 @@
         })
         .map((el) => {
           const rect = el.getBoundingClientRect();
-          const target = clickable(el);
+          const target = getClickableTarget(el);
           let score = 0;
 
           if (target !== el) score += 15;
@@ -658,7 +658,7 @@
           if (rect.left < window.innerWidth * 0.55) score += 10;
           if (rect.width > 80) score += 5;
 
-          const text = norm(el.textContent);
+          const text = normalizeText(el.textContent);
           if (variants.includes(text)) score += 20;
 
           return { el, score, area: rect.width * rect.height };
@@ -666,17 +666,17 @@
         .sort((a, b) => b.score - a.score || a.area - b.area);
 
       const found = matches[0]?.el || null;
-      return found ? bestActionAncestor(found) : null;
+      return found ? findBestActionTarget(found) : null;
     }
 
     function unitChatLoaded() {
       const variants = targetUnitVariants();
       if (!variants.length) return false;
 
-      return all("h1,h2,h3,strong,span,div")
-        .filter(visible)
+      return queryAll("h1,h2,h3,strong,span,div")
+        .filter(isVisible)
         .some((el) => {
-          const text = norm(el.textContent);
+          const text = normalizeText(el.textContent);
           return (
             text.includes("chat") &&
             variants.some((variant) => text.includes(variant))
@@ -686,15 +686,15 @@
 
     function newConversationButton() {
       return (
-        exactText(
+        findExactText(
           "+ Nova Conversa",
           "button,a,[role=button],span,div"
         ) ||
-        exactText(
+        findExactText(
           "Nova Conversa",
           "button,a,[role=button],span,div"
         ) ||
-        findContains(
+        findByTextParts(
           "button,a,[role=button],[tabindex]",
           [["nova", "conversa"], ["novo", "contato"]]
         )
@@ -702,25 +702,25 @@
     }
 
     function findInputNearLabel(terms) {
-      const labels = all("label,span,div,p").filter(visible);
+      const labels = queryAll("label,span,div,p").filter(isVisible);
 
       for (const label of labels) {
-        const text = norm(label.textContent);
+        const text = normalizeText(label.textContent);
 
-        if (!terms.some((term) => text.includes(norm(term)))) continue;
+        if (!terms.some((term) => text.includes(normalizeText(term)))) continue;
 
         if (label.tagName === "LABEL") {
           const nested = label.querySelector("input");
-          if (nested && visible(nested)) return nested;
+          if (nested && isVisible(nested)) return nested;
 
           const id = label.getAttribute("for");
 
           if (id) {
-            for (const root of roots()) {
+            for (const root of getSearchRoots()) {
               try {
                 const input = root.getElementById?.(id);
 
-                if (input instanceof HTMLInputElement && visible(input)) {
+                if (input instanceof HTMLInputElement && isVisible(input)) {
                   return input;
                 }
               } catch {}
@@ -730,9 +730,9 @@
 
         const lr = label.getBoundingClientRect();
 
-        const candidates = all("input")
+        const candidates = queryAll("input")
           .filter((input) => {
-            if (!visible(input)) return false;
+            if (!isVisible(input)) return false;
 
             const r = input.getBoundingClientRect();
 
@@ -755,10 +755,10 @@
     }
 
     function conversationModal() {
-      const direct = all('[role="dialog"],[aria-modal="true"]')
+      const direct = queryAll('[role="dialog"],[aria-modal="true"]')
         .filter((el) => {
-          if (!visible(el)) return false;
-          const text = norm(el.textContent);
+          if (!isVisible(el)) return false;
+          const text = normalizeText(el.textContent);
           return (
             text.includes("nova conversa") &&
             text.includes("telefone") &&
@@ -773,7 +773,7 @@
 
       if (direct) return direct;
 
-      const title = exactText(
+      const title = findExactText(
         "Nova Conversa",
         "h1,h2,h3,strong,span,div"
       );
@@ -781,9 +781,9 @@
       let node = title;
 
       for (let depth = 0; node && depth < 10; depth += 1, node = node.parentElement) {
-        if (!visible(node)) continue;
+        if (!isVisible(node)) continue;
 
-        const text = norm(node.textContent);
+        const text = normalizeText(node.textContent);
         const inputs = node.querySelectorAll?.("input")?.length || 0;
 
         if (
@@ -802,25 +802,25 @@
       const modal = conversationModal();
       if (!modal) return [];
 
-      return [...modal.querySelectorAll("input")].filter(visible);
+      return [...modal.querySelectorAll("input")].filter(isVisible);
     }
 
     function nameInput() {
       const modal = conversationModal();
       if (!modal) return null;
 
-      const inputs = [...modal.querySelectorAll("input")].filter(visible);
+      const inputs = [...modal.querySelectorAll("input")].filter(isVisible);
 
       // O Scale usa "João Silva" como placeholder do campo Nome.
       const byPlaceholder = inputs.find((input) => {
-        const placeholder = norm(input.getAttribute("placeholder"));
+        const placeholder = normalizeText(input.getAttribute("placeholder"));
         return placeholder === "joao silva" || placeholder.includes("joao silva");
       });
 
       if (byPlaceholder) return byPlaceholder;
 
       const byNameHint = inputs.find((input) => {
-        const hint = norm(
+        const hint = normalizeText(
           [
             input.getAttribute("aria-label"),
             input.getAttribute("name"),
@@ -839,11 +839,11 @@
       const modal = conversationModal();
       if (!modal) return null;
 
-      const inputs = [...modal.querySelectorAll("input")].filter(visible);
+      const inputs = [...modal.querySelectorAll("input")].filter(isVisible);
 
       // O Scale usa "11999998888" como placeholder do telefone.
       const byPlaceholder = inputs.find((input) => {
-        const placeholder = digits(input.getAttribute("placeholder"));
+        const placeholder = keepOnlyDigits(input.getAttribute("placeholder"));
         return placeholder === "11999998888";
       });
 
@@ -853,7 +853,7 @@
       if (byType) return byType;
 
       const byPhoneHint = inputs.find((input) => {
-        const hint = norm(
+        const hint = normalizeText(
           [
             input.getAttribute("aria-label"),
             input.getAttribute("name"),
@@ -938,7 +938,7 @@
         // Algumas bibliotecas de formulário só aceitam a mudança após seleção.
         if (
           String(input.value || "") !== wanted &&
-          digits(input.value) !== digits(wanted)
+          keepOnlyDigits(input.value) !== keepOnlyDigits(wanted)
         ) {
           input.focus();
           try {
@@ -956,8 +956,8 @@
 
         return (
           String(input.value || "") === wanted ||
-          digits(input.value) === digits(wanted) ||
-          norm(input.value).includes(norm(wanted))
+          keepOnlyDigits(input.value) === keepOnlyDigits(wanted) ||
+          normalizeText(input.value).includes(normalizeText(wanted))
         );
       } catch {
         return false;
@@ -970,19 +970,19 @@
     ];
 
     function nameOnlyTemplateModal() {
-      const dialogs = all(
+      const dialogs = queryAll(
         '[role="dialog"],[aria-modal="true"],div'
       )
         .filter((el) => {
-          if (!visible(el)) return false;
+          if (!isVisible(el)) return false;
 
-          const text = norm(el.textContent);
+          const text = normalizeText(el.textContent);
           const variableInputs = [...el.querySelectorAll("input")].filter(
             (input) => {
-              if (!visible(input)) return false;
+              if (!isVisible(input)) return false;
 
-              const placeholder = norm(input.getAttribute("placeholder"));
-              const aria = norm(input.getAttribute("aria-label"));
+              const placeholder = normalizeText(input.getAttribute("placeholder"));
+              const aria = normalizeText(input.getAttribute("aria-label"));
 
               return (
                 placeholder.includes("valor da variavel") ||
@@ -1022,7 +1022,7 @@
       const modal = nameOnlyTemplateModal();
       if (!modal) return "";
 
-      const text = norm(modal.textContent);
+      const text = normalizeText(modal.textContent);
 
       return (
         nameOnlyTemplates.find((template) => text.includes(template)) || ""
@@ -1035,10 +1035,10 @@
 
       return (
         [...modal.querySelectorAll("input")]
-          .filter(visible)
+          .filter(isVisible)
           .find((input) => {
-            const placeholder = norm(input.getAttribute("placeholder"));
-            const aria = norm(input.getAttribute("aria-label"));
+            const placeholder = normalizeText(input.getAttribute("placeholder"));
+            const aria = normalizeText(input.getAttribute("aria-label"));
 
             return (
               placeholder.includes("valor da variavel 1") ||
@@ -1060,7 +1060,7 @@
       const templateName = activeNameOnlyTemplate() || "template";
 
       if (!studentName) {
-        showToast(
+        showAutomationStatus(
           `${templateName} detectado, mas não recebi o nome do aluno.`
         );
         return true;
@@ -1077,7 +1077,7 @@
 
           if (
             current !== studentName &&
-            norm(current) !== norm(studentName)
+            normalizeText(current) !== normalizeText(studentName)
           ) {
             setValue(freshInput, studentName);
           }
@@ -1092,19 +1092,19 @@
 
           if (
             finalValue === studentName ||
-            norm(finalValue) === norm(studentName)
+            normalizeText(finalValue) === normalizeText(studentName)
           ) {
-            showToast(
+            showAutomationStatus(
               `${templateName} preenchido com o nome ${studentName}. Revise e clique em Enviar Template.`
             );
           } else {
-            showToast(
+            showAutomationStatus(
               `${templateName} detectado, mas não consegui preencher o nome automaticamente. Confira antes de enviar.`
             );
           }
 
           finished = true;
-          chrome.storage.local.remove([LEAD_KEY]);
+          chrome.storage.local.remove([PENDING_LEAD_STORAGE_KEY]);
         }, 220);
       }, 180);
 
@@ -1120,18 +1120,18 @@
     function templateVariablesModal() {
       if (!billingTemplateExpected()) return null;
 
-      const dialogs = all(
+      const dialogs = queryAll(
         '[role="dialog"],[aria-modal="true"],div'
       )
         .filter((el) => {
-          if (!visible(el)) return false;
+          if (!isVisible(el)) return false;
 
-          const text = norm(el.textContent);
+          const text = normalizeText(el.textContent);
           const variableInputs = [...el.querySelectorAll("input")].filter(
             (input) => {
-              if (!visible(input)) return false;
-              const placeholder = norm(input.getAttribute("placeholder"));
-              const aria = norm(input.getAttribute("aria-label"));
+              if (!isVisible(input)) return false;
+              const placeholder = normalizeText(input.getAttribute("placeholder"));
+              const aria = normalizeText(input.getAttribute("aria-label"));
               return (
                 placeholder.includes("valor da variavel") ||
                 aria.includes("valor da variavel")
@@ -1160,10 +1160,10 @@
       if (!modal) return [];
 
       const inputs = [...modal.querySelectorAll("input")]
-        .filter(visible)
+        .filter(isVisible)
         .filter((input) => {
-          const placeholder = norm(input.getAttribute("placeholder"));
-          const aria = norm(input.getAttribute("aria-label"));
+          const placeholder = normalizeText(input.getAttribute("placeholder"));
+          const aria = normalizeText(input.getAttribute("aria-label"));
 
           return (
             placeholder.includes("valor da variavel") ||
@@ -1175,7 +1175,7 @@
 
       // Fallback caso o Scale altere apenas os placeholders.
       return [...modal.querySelectorAll("input")]
-        .filter(visible)
+        .filter(isVisible)
         .slice(-4);
     }
 
@@ -1214,7 +1214,7 @@
 
               if (
                 current !== value &&
-                norm(current) !== norm(value)
+                normalizeText(current) !== normalizeText(value)
               ) {
                 failed.push(currentIndex + 1);
               }
@@ -1249,7 +1249,7 @@
 
                 if (
                   current !== value &&
-                  norm(current) !== norm(value)
+                  normalizeText(current) !== normalizeText(value)
                 ) {
                   stillMissing.push(currentIndex + 1);
                 }
@@ -1259,17 +1259,17 @@
               templateFillInProgress = false;
 
               if (stillMissing.length) {
-                showToast(
+                showAutomationStatus(
                   `Template detectado, mas não consegui preencher automaticamente as variáveis ${stillMissing.join(", ")}. Confira antes de enviar.`
                 );
               } else {
-                showToast(
+                showAutomationStatus(
                   "Cobrança preenchida: nome, fim do último contrato, débito e orientação do App. Revise e clique em Enviar Template."
                 );
               }
 
               finished = true;
-              chrome.storage.local.remove([LEAD_KEY]);
+              chrome.storage.local.remove([PENDING_LEAD_STORAGE_KEY]);
             }, 260);
           }, 260);
 
@@ -1303,7 +1303,7 @@
       const modal = conversationModal();
       if (!modal) return false;
 
-      const text = norm(modal.textContent);
+      const text = normalizeText(modal.textContent);
       return (
         text.includes("brasil") &&
         (text.includes("+55") || text.includes("br +55"))
@@ -1313,7 +1313,7 @@
     function chooseBrazil() {
       if (countrySelected()) return true;
 
-      const label = findContains("label,span,div,p", [
+      const label = findByTextParts("label,span,div,p", [
         ["pais", "ddi"],
         ["pais"]
       ]);
@@ -1331,25 +1331,25 @@
           ...parent.querySelectorAll(
             "button,[role=combobox],[role=button]"
           )
-        ].find(visible);
+        ].find(isVisible);
 
         if (!control) continue;
 
-        if (!safeClick(control, "Selecionando Brasil +55…")) {
+        if (!clickSafely(control, "Selecionando Brasil +55…")) {
           return false;
         }
 
         setTimeout(() => {
           const brazil =
-            exactText("Brasil +55") ||
-            exactText("Brasil") ||
-            findContains(
+            findExactText("Brasil +55") ||
+            findExactText("Brasil") ||
+            findByTextParts(
               "[role=option],[role=menuitem],button,li,div",
               [["brasil", "+55"], ["brasil"]]
             );
 
           if (brazil) {
-            safeClick(
+            clickSafely(
               brazil,
               "Brasil +55 selecionado.",
               250
@@ -1365,14 +1365,14 @@
 
     function validName(input) {
       if (!input || !lead.nome) return false;
-      return norm(input.value) === norm(lead.nome);
+      return normalizeText(input.value) === normalizeText(lead.nome);
     }
 
     function validPhone(input) {
       if (!input) return false;
 
-      const current = digits(input.value);
-      const expected = digits(lead.phone).slice(-11);
+      const current = keepOnlyDigits(input.value);
+      const expected = keepOnlyDigits(lead.phone).slice(-11);
 
       return Boolean(current && current === expected);
     }
@@ -1383,18 +1383,18 @@
       const phone = phoneInput();
 
       if (!modal) {
-        showToast("Aguardando o modal Nova Conversa…");
+        showAutomationStatus("Aguardando o modal Nova Conversa…");
         return;
       }
 
       if (!name || !phone) {
-        showToast(
+        showAutomationStatus(
           `Modal encontrado. Nome: ${name ? "OK" : "não localizado"} · Telefone: ${phone ? "OK" : "não localizado"}`
         );
         return;
       }
 
-      const expectedPhone = digits(lead.phone).slice(-11);
+      const expectedPhone = keepOnlyDigits(lead.phone).slice(-11);
 
       if (!validName(name)) {
         setValue(name, lead.nome);
@@ -1408,7 +1408,7 @@
       const phoneOk = validPhone(phone);
 
       if (!nameOk || !phoneOk) {
-        showToast(
+        showAutomationStatus(
           `Preenchendo… Nome: ${nameOk ? "OK" : "aguardando"} · Telefone: ${phoneOk ? "OK" : "aguardando"}`
         );
 
@@ -1433,15 +1433,15 @@
       initialLeadFilled = true;
       lead.stage = "template";
 
-      chrome.storage.local.get([LEAD_KEY], (result) => {
-        const pending = result?.[LEAD_KEY];
+      chrome.storage.local.get([PENDING_LEAD_STORAGE_KEY], (result) => {
+        const pending = result?.[PENDING_LEAD_STORAGE_KEY];
 
         if (
           pending &&
-          digits(pending.phone) === digits(lead.phone)
+          keepOnlyDigits(pending.phone) === keepOnlyDigits(lead.phone)
         ) {
           chrome.storage.local.set({
-            [LEAD_KEY]: {
+            [PENDING_LEAD_STORAGE_KEY]: {
               ...pending,
               nome: String(lead.nome || pending.nome || "").trim(),
               stage: "template",
@@ -1452,13 +1452,13 @@
       });
 
       if (billingTemplateExpected()) {
-        showToast(
+        showAutomationStatus(
           "Nome e telefone preenchidos. Clique em Continuar e escolha cobranca_mensalidade_atraso; as variáveis serão preenchidas automaticamente."
         );
         return;
       }
 
-      showToast(
+      showAutomationStatus(
         "Nome e telefone preenchidos. Nos templates de saudação e inauguração, o nome do aluno será preenchido automaticamente."
       );
       return;
@@ -1478,13 +1478,13 @@
       if (initialLeadFilled) {
         if (billingTemplateExpected()) {
 
-          showToast(
+          showAutomationStatus(
             "Aguardando você selecionar o template cobranca_mensalidade_atraso…"
           );
           return;
         }
 
-        showToast(
+        showAutomationStatus(
           "Aguardando seleção de template. Em iniciar__conversa_oi e inauguracao_26fitt, a variável 1 recebe o nome automaticamente."
         );
         return;
@@ -1499,13 +1499,13 @@
         const button = newConversationButton();
 
         if (button) {
-          safeClick(
+          clickSafely(
             button,
             "Abrindo Nova Conversa…",
             400
           );
         } else {
-          showToast(
+          showAutomationStatus(
             `${targetUnitLabel()} carregada. Aguardando Nova Conversa…`
           );
         }
@@ -1515,7 +1515,7 @@
 
       if (unitPanelVisible()) {
         if (!targetUnitVariants().length) {
-          showToast(
+          showAutomationStatus(
             "Não recebi a unidade deste lead. Selecione a unidade manualmente e abra Nova Conversa."
           );
           return;
@@ -1530,7 +1530,7 @@
           ) {
             unitClickedAt = Date.now();
 
-            const clicked = safeClick(
+            const clicked = clickSafely(
               row,
               `Selecionando a unidade ${targetUnitLabel()}…`,
               350
@@ -1539,22 +1539,22 @@
             // Fallback para interfaces em que o clique fica preso no texto
             // e o handler está no cartão/linha que está por baixo.
             if (!clicked) {
-              coordinateClick(row);
+              clickAtElementCenter(row);
             }
 
             setTimeout(() => {
               if (!unitChatLoaded() && unitPanelVisible()) {
-                coordinateClick(row);
-                showToast(`Reforçando a seleção da unidade ${targetUnitLabel()}…`);
+                clickAtElementCenter(row);
+                showAutomationStatus(`Reforçando a seleção da unidade ${targetUnitLabel()}…`);
               }
             }, 900);
           } else {
-            showToast(
+            showAutomationStatus(
               `${targetUnitLabel()} selecionada. Aguardando o chat carregar…`
             );
           }
         } else {
-          showToast(
+          showAutomationStatus(
             `Lista de unidades aberta. Aguardando ${targetUnitLabel()} aparecer…`
           );
         }
@@ -1571,13 +1571,13 @@
         ) {
           chatUnidadesClickedAt = Date.now();
 
-          safeClick(
+          clickSafely(
             chatOption,
             "Entrando em Chat Unidades…",
             350
           );
         } else {
-          showToast(
+          showAutomationStatus(
             "Chat Unidades selecionado. Aguardando a lista de unidades…"
           );
         }
@@ -1594,13 +1594,13 @@
         if (icon) {
           sidebarClickedAt = Date.now();
 
-          safeClick(
+          clickSafely(
             icon,
             "Abrindo o menu de chats…",
             350
           );
         } else {
-          showToast(
+          showAutomationStatus(
             "Aguardando o painel do Scale carregar…"
           );
         }
@@ -1608,13 +1608,13 @@
         return;
       }
 
-      showToast(
+      showAutomationStatus(
         "Menu de chats aberto. Aguardando Chat Unidades…"
       );
     }
 
-    showToast(
-      modalLooksOpen()
+    showAutomationStatus(
+      isNewConversationModalOpen()
         ? "Nova Conversa detectada. Preenchendo o lead agora…"
         : "Lead recebido. Aguardando o Scale ficar pronto…"
     );
@@ -1646,7 +1646,7 @@
         observer.disconnect();
 
         if (!finished) {
-          showToast(
+          showAutomationStatus(
             "A automação parou nesta etapa. Envie um print com esta mensagem."
           );
         }

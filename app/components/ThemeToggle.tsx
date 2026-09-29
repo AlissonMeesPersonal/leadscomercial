@@ -4,51 +4,85 @@ import { useEffect, useState } from "react";
 
 type Theme = "light" | "dark";
 
-function getInitialTheme(): Theme {
-  if (typeof window === "undefined") return "dark";
+const THEME_STORAGE_KEY = "leads-theme";
 
-  const saved = localStorage.getItem("leads-theme");
-  if (saved === "light" || saved === "dark") return saved;
-
-  return window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
-}
-
-export default function ThemeToggle({ compact = false }: { compact?: boolean }) {
-  const [theme, setTheme] = useState<Theme>("dark");
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    const initial = getInitialTheme();
-    setTheme(initial);
-    document.documentElement.dataset.theme = initial;
-    setMounted(true);
-  }, []);
-
-  function toggleTheme() {
-    const next = theme === "dark" ? "light" : "dark";
-    setTheme(next);
-    localStorage.setItem("leads-theme", next);
-    document.documentElement.dataset.theme = next;
+function readPreferredTheme(): Theme {
+  if (typeof window === "undefined") {
+    return "dark";
   }
 
-  if (!mounted) {
+  const savedTheme = localStorage.getItem(THEME_STORAGE_KEY);
+
+  if (savedTheme === "light" || savedTheme === "dark") {
+    return savedTheme;
+  }
+
+  return window.matchMedia("(prefers-color-scheme: light)").matches
+    ? "light"
+    : "dark";
+}
+
+function applyTheme(theme: Theme) {
+  document.documentElement.dataset.theme = theme;
+}
+
+export default function ThemeToggle({
+  compact = false
+}: {
+  compact?: boolean;
+}) {
+  const [theme, setTheme] = useState<Theme>("dark");
+  const [isReady, setIsReady] = useState(false);
+
+  useEffect(() => {
+    const preferredTheme = readPreferredTheme();
+
+    setTheme(preferredTheme);
+    applyTheme(preferredTheme);
+    setIsReady(true);
+  }, []);
+
+  function handleThemeChange() {
+    const nextTheme: Theme = theme === "dark" ? "light" : "dark";
+
+    setTheme(nextTheme);
+    localStorage.setItem(THEME_STORAGE_KEY, nextTheme);
+    applyTheme(nextTheme);
+  }
+
+  const className = compact
+    ? "theme-toggle compact"
+    : "theme-toggle";
+
+  if (!isReady) {
     return (
-      <button className={compact ? "theme-toggle compact" : "theme-toggle"} type="button" aria-label="Alternar tema">
+      <button
+        className={className}
+        type="button"
+        aria-label="Alternar tema"
+      >
         ◐
       </button>
     );
   }
 
+  const isDark = theme === "dark";
+
   return (
     <button
-      className={compact ? "theme-toggle compact" : "theme-toggle"}
+      className={className}
       type="button"
-      onClick={toggleTheme}
-      aria-label={theme === "dark" ? "Ativar modo claro" : "Ativar modo escuro"}
-      title={theme === "dark" ? "Modo claro" : "Modo escuro"}
+      onClick={handleThemeChange}
+      aria-label={isDark ? "Ativar modo claro" : "Ativar modo escuro"}
+      title={isDark ? "Modo claro" : "Modo escuro"}
     >
-      <span className="theme-icon" aria-hidden="true">{theme === "dark" ? "☀" : "☾"}</span>
-      {!compact && <span>{theme === "dark" ? "Modo claro" : "Modo escuro"}</span>}
+      <span className="theme-icon" aria-hidden="true">
+        {isDark ? "☀" : "☾"}
+      </span>
+
+      {!compact && (
+        <span>{isDark ? "Modo claro" : "Modo escuro"}</span>
+      )}
     </button>
   );
 }
