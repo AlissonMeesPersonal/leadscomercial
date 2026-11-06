@@ -735,6 +735,7 @@ function textToLeads(text: string, origem: string): Lead[] {
 
 export default function DashboardPage() {
   const inputRef = useRef<HTMLInputElement>(null);
+  const deletingImportRef = useRef(false);
   const [leads, setLeads] = useState<Lead[]>([]);
   const [owners, setOwners] = useState<OwnerUser[]>([]);
   const [units, setUnits] = useState<UnitInfo[]>([]);
@@ -849,7 +850,7 @@ export default function DashboardPage() {
     let refreshing = false;
 
     async function refreshLeads() {
-      if (refreshing) return;
+      if (refreshing || deletingImportRef.current) return;
       refreshing = true;
 
       try {
@@ -871,7 +872,7 @@ export default function DashboardPage() {
           delinquentItemResponse.json() as Promise<DelinquentItem[]>
         ]);
 
-        if (!cancelled) {
+        if (!cancelled && !deletingImportRef.current) {
           setLeads(rows.map(mapDbLead));
           setDelinquentBatches(batchRows);
           setDelinquentItems(
@@ -1635,7 +1636,7 @@ export default function DashboardPage() {
   }
 
   async function deleteImportedFolder(folder: (typeof importedFolders)[number]) {
-    if (processing || !sessionInfo || !["admin", "commercial"].includes(sessionInfo.role)) return;
+    if (processing || deletingImportRef.current || !sessionInfo || !["admin", "commercial"].includes(sessionInfo.role)) return;
     if (sessionInfo.role === "commercial" && folder.ownerId !== currentOwnerId) return;
 
     const ok = window.confirm(
@@ -1643,30 +1644,80 @@ export default function DashboardPage() {
     );
     if (!ok) return;
 
+    deletingImportRef.current = true;
     setProcessing(true);
-    const removedIds: string[] = [];
+    let completed = false;
     try {
-      // Uma requisição por bloco, em vez de excluir contatos individualmente.
-      for (let index = 0; index < folder.ids.length; index += 75) {
-        const ids = folder.ids.slice(index, index + 75);
+      // Confirma o conjunto existente no servidor para não operar com uma lista antiga.
+      const beforeResponse = await supabaseRequest(
+        "/rest/v1/commercial_leads?select=id,source,demand_type,owner_user_id,unit_id&demand_type=eq." +
+        encodeURIComponent(activeTab) +
+        "&owner_user_id=eq." + encodeURIComponent(folder.ownerId) +
+        "&unit_id=" + (folder.unitId ? "eq." + encodeURIComponent(folder.unitId) : "is.null")
+      );
+      const before = (await beforeResponse.json()) as {
+        id: string; source: string; demand_type: DemandType;
+        owner_user_id: string | null; unit_id: string | null;
+      }[];
+      const ids = before
+        .filter((item) => item.source.split(" • ")[0].trim() === folder.filename)
+        .map((item) => item.id);
+
+      if (!ids.length) {
+        throw new Error("Este arquivo não possui mais registros. Atualize a página para conferir.");
+      }
+      if (ids.length !== folder.ids.length) {
+        throw new Error("A pasta foi modificada por outro usuário. Atualize a página antes de excluir.");
+      }
+
+      for (let index = 0; index < ids.length; index += 75) {
+        const chunk = ids.slice(index, index + 75);
         const response = await supabaseRequest(
-          `/rest/v1/commercial_leads?id=in.(${ids.map(encodeURIComponent).join(",")})&demand_type=eq.${activeTab}&owner_user_id=eq.${encodeURIComponent(folder.ownerId)}&unit_id=${folder.unitId ? `eq.${encodeURIComponent(folder.unitId)}` : "is.null"}&select=id`,
+          `/rest/v1/commercial_leads?id=in.(${chunk.map(encodeURIComponent).join(",")})&demand_type=eq.${activeTab}&owner_user_id=eq.${encodeURIComponent(folder.ownerId)}&unit_id=${folder.unitId ? `eq.${encodeURIComponent(folder.unitId)}` : "is.null"}&select=id`,
           { method: "DELETE", headers: { Prefer: "return=representation" } }
         );
         const deleted = (await response.json()) as { id: string }[];
-        if (deleted.length !== ids.length) {
-          throw new Error("O banco não autorizou a exclusão completa. Verifique as permissões da carteira.");
+        if (deleted.length !== chunk.length) {
+          throw new Error("O banco não permitiu excluir todos os registros desta pasta.");
         }
-        removedIds.push(...deleted.map((item) => item.id));
       }
-      setNotice(`Pasta "${folder.filename}" excluída: ${removedIds.length} registro(s).`);
+
+      // Confere novamente no banco: só informa sucesso quando a pasta realmente sumiu.
+      const remainingResponse = await supabaseRequest(
+        "/rest/v1/commercial_leads?select=id,source&demand_type=eq." +
+        encodeURIComponent(activeTab) +
+        "&owner_user_id=eq." + encodeURIComponent(folder.ownerId) +
+        "&unit_id=" + (folder.unitId ? "eq." + encodeURIComponent(folder.unitId) : "is.null")
+      );
+      const remaining = (await remainingResponse.json()) as { id: string; source: string }[];
+      if (remaining.some((item) => item.source.split(" • ")[0].trim() === folder.filename)) {
+        throw new Error("Ainda existem registros desta pasta no banco. A exclusão não foi concluída.");
+      }
+      completed = true;
+      setNotice(`Pasta "${folder.filename}" excluída com sucesso: ${ids.length} registro(s).`);
     } catch (err) {
-      setNotice(err instanceof Error ? err.message : "Não foi possível excluir a pasta.");
+      setNotice(
+        (err instanceof Error ? err.message : "Não foi possível excluir a pasta.") +
+        " A lista será atualizada com os dados reais do banco."
+      );
     } finally {
-      if (removedIds.length) {
-        const removed = new Set(removedIds);
-        setLeads((current) => current.filter((lead) => !removed.has(lead.id)));
+      try {
+        const response = await supabaseRequest(
+          "/rest/v1/commercial_leads?select=id,name,whatsapp,email,city,source,status,demand_type,owner_user_id,unit_id,created_at&order=created_at.desc"
+        );
+        const rows = (await response.json()) as DbLead[];
+        setLeads(rows.map(mapDbLead));
+        if (completed) {
+          const stillHasCity = rows.some(
+            (lead) => lead.demand_type === activeTab &&
+              normalizeHeader(lead.city || "").replace(/\\s+/g, " ").trim() === unitFilter.slice(5)
+          );
+          if (unitFilter.startsWith("city:") && !stillHasCity) setUnitFilter("Todas");
+        }
+      } catch {
+        setNotice("Não foi possível confirmar a lista atualizada. Recarregue a página para conferir os registros.");
       }
+      deletingImportRef.current = false;
       setProcessing(false);
     }
   }
