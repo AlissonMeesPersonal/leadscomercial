@@ -927,7 +927,7 @@ export default function DashboardPage() {
   );
 
   const importedFolders = useMemo(() => {
-    if (activeTab === "delinquent" || !sessionInfo || !currentOwnerId) return [];
+    if (activeTab === "delinquent" || !sessionInfo || (sessionInfo.role === "commercial" && !currentOwnerId)) return [];
 
     const folders = new Map<string, {
       key: string; filename: string; ownerId: string; unitId: string | null; ids: string[];
@@ -1639,7 +1639,7 @@ export default function DashboardPage() {
     if (sessionInfo.role === "commercial" && folder.ownerId !== currentOwnerId) return;
 
     const ok = window.confirm(
-      `Excluir a pasta "${folder.filename}" e seus ${folder.ids.length} registro(s)?\\n\\nEsta ação não poderá ser desfeita. Outras pastas não serão excluídas.`
+      `Excluir a pasta "${folder.filename}" e seus ${folder.ids.length} registro(s)?\n\nEsta ação não poderá ser desfeita. Outras pastas não serão excluídas.`
     );
     if (!ok) return;
 
