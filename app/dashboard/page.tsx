@@ -1454,24 +1454,28 @@ export default function DashboardPage() {
     let skipped = 0;
 
     if (fresh.length) {
-      const response = await supabaseRequest(
-        "/rest/v1/rpc/commercial_import_leads",
-        {
-          method: "POST",
-          body: JSON.stringify({
-            p_leads: fresh.map(serializeLead)
-          })
+      // Processa lotes menores e contabiliza a quantidade realmente aceita pelo banco.
+      // Assim não se confunde total da planilha com novos registros cadastrados.
+      for (let offset = 0; offset < fresh.length; offset += 100) {
+        const chunk = fresh.slice(offset, offset + 100);
+        const response = await supabaseRequest(
+          "/rest/v1/rpc/commercial_import_leads",
+          {
+            method: "POST",
+            body: JSON.stringify({ p_leads: chunk.map(serializeLead) })
+          }
+        );
+        const savedRows = (await response.json()) as DbLead[];
+        const saved = savedRows.map(mapDbLead);
+        added += saved.length;
+        skipped += Math.max(0, chunk.length - saved.length);
+        if (saved.length) {
+          setLeads((current) => {
+            const next = new Map(current.map((lead) => [lead.id, lead] as const));
+            for (const lead of saved) next.set(lead.id, lead);
+            return [...next.values()];
+          });
         }
-      );
-
-      const savedRows = (await response.json()) as DbLead[];
-      const saved = savedRows.map(mapDbLead);
-
-      added = saved.length;
-      skipped += Math.max(0, fresh.length - saved.length);
-
-      if (saved.length) {
-        setLeads((current) => [...saved, ...current]);
       }
     }
 
@@ -1507,22 +1511,23 @@ export default function DashboardPage() {
       items.length - fresh.length - enrichPayload.length
     );
 
-    if (!added && !enriched) {
-      setNotice(
-        skipped
-          ? `${skipped} registro(s) já estavam completos nesta carteira.`
-          : "Nenhum registro novo foi encontrado."
-      );
-      return;
-    }
+    const totalRead = items.length;
+    const parts = [
+      `Arquivo processado: ${totalRead} oportunidade(s) lida(s)`,
+      `${added} novo(s) registro(s) salvo(s)`
+    ];
 
-    const parts: string[] = [];
+    if (enriched) parts.push(`${enriched} cadastro(s) existente(s) atualizado(s)`);
+    if (skipped) parts.push(`${skipped} já existente(s) ou não inserido(s) pelo banco`);
 
-    if (added) parts.push(`${added} registro(s) importado(s)`);
-    if (enriched) parts.push(`${enriched} atualizado(s) com telefone/cidade/unidade`);
-    if (skipped) parts.push(`${skipped} já existente(s)`);
+    // A contagem de novos cadastros não representa o tamanho da planilha:
+    // registros previamente existentes são preservados para evitar duplicação.
+    setNotice(parts.join(" · ") + (
+      skipped
+        ? ". Registros já existentes não são duplicados. Confira o total geral da carteira antes de repetir a importação."
+        : "."
+    ));
 
-    setNotice(parts.join(" · ") + ".");
   }
 
   function openImporter(type: DemandType) {
