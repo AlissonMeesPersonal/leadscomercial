@@ -42,6 +42,7 @@ type ImportAudit = {
 
 type SessionInfo = {
   username: string;
+  userId: string;
   displayName: string;
   role: "admin" | "commercial" | "user";
   unitId: string | null;
@@ -944,12 +945,15 @@ export default function DashboardPage() {
   );
 
   const currentOwnerId = useMemo(() => {
-    const username = sessionInfo?.username.toLowerCase();
-    if (!username) return null;
-
-    return (
-      owners.find((owner) => owner.username.toLowerCase() === username)?.id || null
-    );
+    if (!sessionInfo) return null;
+    // A conta comercial compartilhada tem identificador de sessão próprio.
+    // Contas individuais usam o ID autenticado do banco.
+    if (sessionInfo.userId && sessionInfo.userId !== "setor-comercial") {
+      return sessionInfo.userId;
+    }
+    return owners.find(
+      (owner) => owner.username.toLowerCase() === sessionInfo.username.toLowerCase()
+    )?.id || null;
   }, [owners, sessionInfo]);
 
   const tabLeads = useMemo(
@@ -958,7 +962,7 @@ export default function DashboardPage() {
   );
 
   const importedFolders = useMemo(() => {
-    if (!sessionInfo || (sessionInfo.role === "commercial" && !currentOwnerId)) return [];
+    if (!sessionInfo || (sessionInfo.role !== "admin" && !currentOwnerId)) return [];
 
     const folders = new Map<string, {
       key: string; filename: string; ownerId: string; unitId: string | null;
@@ -970,7 +974,7 @@ export default function DashboardPage() {
       const filename = lead.origem.split(" • ")[0].trim();
       if (!/\\.(xlsx?|xlsm|xlsb|ods|csv|tsv|txt|pdf|docx?|json)$/i.test(filename)) continue;
       if (sessionInfo.unitId && lead.unitId !== sessionInfo.unitId) continue;
-      if (sessionInfo.role === "commercial" && lead.ownerUserId !== currentOwnerId) continue;
+      if (sessionInfo.role !== "admin" && lead.ownerUserId !== currentOwnerId) continue;
       if (!lead.ownerUserId) continue;
 
       const key = JSON.stringify([lead.tipo, filename, lead.ownerUserId, lead.unitId]);
@@ -1003,7 +1007,7 @@ export default function DashboardPage() {
     const search = normalizeHeader(fileSearch);
     return delinquentBatches.filter((batch) => {
       if (sessionInfo.unitId && batch.unit_id !== sessionInfo.unitId) return false;
-      if (sessionInfo.role === "commercial" && batch.owner_user_id !== currentOwnerId) return false;
+      if (sessionInfo.role !== "admin" && batch.owner_user_id !== currentOwnerId) return false;
       return !search || normalizeHeader([
         batch.source, "inadimplentes", batch.batch_date,
         owners.find((owner) => owner.id === batch.owner_user_id)?.display_name || "",
@@ -1727,9 +1731,9 @@ export default function DashboardPage() {
   }
 
   async function deleteImportedFolder(folder: (typeof importedFolders)[number]) {
-    if (processing || deletingImportRef.current || !sessionInfo || !["admin", "commercial"].includes(sessionInfo.role)) return;
+    if (processing || deletingImportRef.current || !sessionInfo) return;
     if (folder.demandType !== "opportunity" && folder.demandType !== "inactive") return;
-    if (sessionInfo.role === "commercial" && folder.ownerId !== currentOwnerId) return;
+    if (sessionInfo.role !== "admin" && folder.ownerId !== currentOwnerId) return;
 
     const ok = window.confirm(
       `Excluir a pasta "${folder.filename}" e seus ${folder.ids.length} registro(s)?\n\nEsta ação não poderá ser desfeita. Outras pastas não serão excluídas.`
@@ -2113,7 +2117,7 @@ export default function DashboardPage() {
           <span>Inativos</span>
           <strong>{inactiveCount}</strong>
         </button>
-        {sessionInfo && (sessionInfo.role === "admin" || sessionInfo.role === "commercial") && (
+        {sessionInfo && (
           <button
             type="button"
             className={showFilesTab ? "demand-tab files active" : "demand-tab files"}
@@ -2131,7 +2135,7 @@ export default function DashboardPage() {
             <div>
               <p className="eyebrow">ARQUIVOS IMPORTADOS</p>
               <h2>Gerenciar arquivos</h2>
-              <p>Consulte os arquivos de todas as carteiras e exclua importações de oportunidades e inativos com confirmação.</p>
+              <p>{sessionInfo?.role === "admin" ? "Visualize as importações de todos os usuários e gerencie os arquivos." : "Visualize somente os arquivos importados pela sua conta."}</p>
             </div>
             <span className="file-manager-total">{importedFolders.length + visibleDelinquentImports.length} importações</span>
           </div>
