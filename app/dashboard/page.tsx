@@ -926,6 +926,32 @@ export default function DashboardPage() {
     [leads, activeTab]
   );
 
+  const importedFolders = useMemo(() => {
+    if (activeTab === "delinquent" || !sessionInfo || !currentOwnerId) return [];
+
+    const folders = new Map<string, {
+      key: string; filename: string; ownerId: string; unitId: string | null; ids: string[];
+    }>();
+
+    for (const lead of tabLeads) {
+      // A planilha pode ter várias abas; todas pertencem ao mesmo arquivo.
+      const filename = lead.origem.split(" • ")[0].trim();
+      if (!/\.(xlsx?|csv|txt|pdf|docx?)$/i.test(filename)) continue;
+      if (sessionInfo.unitId && lead.unitId !== sessionInfo.unitId) continue;
+      if (sessionInfo.role === "commercial" && lead.ownerUserId !== currentOwnerId) continue;
+      if (!lead.ownerUserId) continue;
+
+      const key = JSON.stringify([filename, lead.ownerUserId, lead.unitId]);
+      const folder = folders.get(key) || {
+        key, filename, ownerId: lead.ownerUserId, unitId: lead.unitId, ids: []
+      };
+      folder.ids.push(lead.id);
+      folders.set(key, folder);
+    }
+
+    return [...folders.values()].sort((a, b) => a.filename.localeCompare(b.filename, "pt-BR"));
+  }, [activeTab, sessionInfo, currentOwnerId, tabLeads]);
+
   const unitById = useMemo(
     () => new Map(units.map((unit) => [unit.id, unit] as const)),
     [units]
@@ -1608,6 +1634,43 @@ export default function DashboardPage() {
     }
   }
 
+  async function deleteImportedFolder(folder: (typeof importedFolders)[number]) {
+    if (processing || !sessionInfo || !["admin", "commercial"].includes(sessionInfo.role)) return;
+    if (sessionInfo.role === "commercial" && folder.ownerId !== currentOwnerId) return;
+
+    const ok = window.confirm(
+      `Excluir a pasta "${folder.filename}" e seus ${folder.ids.length} registro(s)?\\n\\nEsta ação não poderá ser desfeita. Outras pastas não serão excluídas.`
+    );
+    if (!ok) return;
+
+    setProcessing(true);
+    const removedIds: string[] = [];
+    try {
+      // Uma requisição por bloco, em vez de excluir contatos individualmente.
+      for (let index = 0; index < folder.ids.length; index += 75) {
+        const ids = folder.ids.slice(index, index + 75);
+        const response = await supabaseRequest(
+          `/rest/v1/commercial_leads?id=in.(${ids.map(encodeURIComponent).join(",")})&demand_type=eq.${activeTab}&owner_user_id=eq.${encodeURIComponent(folder.ownerId)}&unit_id=${folder.unitId ? `eq.${encodeURIComponent(folder.unitId)}` : "is.null"}&select=id`,
+          { method: "DELETE", headers: { Prefer: "return=representation" } }
+        );
+        const deleted = (await response.json()) as { id: string }[];
+        if (deleted.length !== ids.length) {
+          throw new Error("O banco não autorizou a exclusão completa. Verifique as permissões da carteira.");
+        }
+        removedIds.push(...deleted.map((item) => item.id));
+      }
+      setNotice(`Pasta "${folder.filename}" excluída: ${removedIds.length} registro(s).`);
+    } catch (err) {
+      setNotice(err instanceof Error ? err.message : "Não foi possível excluir a pasta.");
+    } finally {
+      if (removedIds.length) {
+        const removed = new Set(removedIds);
+        setLeads((current) => current.filter((lead) => !removed.has(lead.id)));
+      }
+      setProcessing(false);
+    }
+  }
+
   async function removeLead(id: string) {
     try {
       await supabaseRequest(
@@ -2037,6 +2100,34 @@ export default function DashboardPage() {
           </button>
         </div>
       </section>
+
+      {sessionInfo && (sessionInfo.role === "admin" || sessionInfo.role === "commercial") && activeTab !== "delinquent" && importedFolders.length > 0 && (
+        <section className="imported-folders" aria-label="Arquivos importados">
+          <div className="imported-folders-heading">
+            <strong>Pastas de arquivos importados</strong>
+            <span>Exclua todos os contatos de um arquivo de uma só vez.</span>
+          </div>
+          <div className="imported-folders-list">
+            {importedFolders.map((folder) => (
+              <div className="imported-folder-row" key={folder.key}>
+                <div>
+                  <strong>{folder.filename}</strong>
+                  <small>{folder.ids.length} registro(s) · {ownerById.get(folder.ownerId)?.display_name || "Responsável"}{folder.unitId ? ` · ${unitById.get(folder.unitId)?.name || "Unidade"}` : ""}</small>
+                </div>
+                <button
+                  type="button"
+                  className="delete-btn"
+                  disabled={processing}
+                  onClick={() => void deleteImportedFolder(folder)}
+                  aria-label={`Excluir pasta ${folder.filename}`}
+                >
+                  Excluir pasta inteira
+                </button>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       {notice && <div className="notice">{notice}</div>}
 
