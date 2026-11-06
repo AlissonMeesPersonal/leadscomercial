@@ -4277,3 +4277,31 @@ html[data-theme="light"] .executive-hero-highlight {
 @media (max-width: 700px) {
   .import-audit-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+
+
+/* Gerenciamento de arquivos fica fora dos indicadores e fechado por padrão. */
+.import-manager {
+  margin: 24px 0 18px;
+  padding: 18px 20px;
+  border: 1px solid rgba(148, 163, 184, .22);
+  border-radius: 14px;
+}
+.import-manager-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+}
+.import-manager-header > div {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.import-manager-header strong { font-size: 15px; }
+.import-manager-header span { font-size: 13px; opacity: .75; }
+.import-manager-content { margin-top: 16px; }
+@media (max-width: 680px) {
+  .import-manager { padding: 14px; }
+  .import-manager-header { align-items: stretch; flex-direction: column; }
+  .import-manager-header .ghost-btn { width: 100%; }
+}
