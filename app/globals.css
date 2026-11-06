@@ -4223,3 +4223,36 @@ html[data-theme="light"] .executive-hero-highlight {
     border-color: rgba(255, 106, 0, .5) !important;
   }
 }
+
+
+/* Agrupamento das importações para exclusão em lote. */
+.imported-folders {
+  margin: 18px 0;
+  padding: 20px;
+  border: 1px solid var(--border, rgba(148, 163, 184, .25));
+  border-radius: 16px;
+  background: var(--surface, rgba(148, 163, 184, .06));
+}
+.imported-folders-heading { display: flex; flex-direction: column; gap: 5px; margin-bottom: 16px; }
+.imported-folders-heading strong { font-size: 16px; }
+.imported-folders-heading span { font-size: 13px; opacity: .75; }
+.imported-folders-list { display: grid; gap: 10px; }
+.imported-folder-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 14px;
+  border: 1px solid rgba(148, 163, 184, .2);
+  border-radius: 12px;
+}
+.imported-folder-row > div { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.imported-folder-row strong { overflow-wrap: anywhere; }
+.imported-folder-row small { opacity: .75; }
+.imported-folder-row .delete-btn { white-space: nowrap; }
+.imported-folder-row .delete-btn:disabled { opacity: .5; cursor: not-allowed; }
+@media (max-width: 640px) {
+  .imported-folders { padding: 14px; }
+  .imported-folder-row { flex-direction: column; align-items: stretch; }
+  .imported-folder-row .delete-btn { width: 100%; }
+}
