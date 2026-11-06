@@ -780,6 +780,7 @@ export default function DashboardPage() {
   const importTypeRef = useRef<DemandType>("opportunity");
   const [notice, setNotice] = useState("");
   const [importAudit, setImportAudit] = useState<ImportAudit | null>(null);
+  const [showImportManager, setShowImportManager] = useState(false);
   const [processing, setProcessing] = useState(false);
   const [sessionInfo, setSessionInfo] = useState<SessionInfo | null>(null);
 
@@ -2211,34 +2212,6 @@ export default function DashboardPage() {
         </div>
       </section>
 
-      {sessionInfo && (sessionInfo.role === "admin" || sessionInfo.role === "commercial") && activeTab !== "delinquent" && importedFolders.length > 0 && (
-        <section className="imported-folders" aria-label="Arquivos importados">
-          <div className="imported-folders-heading">
-            <strong>Pastas de arquivos importados</strong>
-            <span>Exclua todos os contatos de um arquivo de uma só vez.</span>
-          </div>
-          <div className="imported-folders-list">
-            {importedFolders.map((folder) => (
-              <div className="imported-folder-row" key={folder.key}>
-                <div>
-                  <strong>{folder.filename}</strong>
-                  <small>{folder.ids.length} registro(s) · {ownerById.get(folder.ownerId)?.display_name || "Responsável"}{folder.unitId ? ` · ${unitById.get(folder.unitId)?.name || "Unidade"}` : ""}</small>
-                </div>
-                <button
-                  type="button"
-                  className="delete-btn"
-                  disabled={processing}
-                  onClick={() => void deleteImportedFolder(folder)}
-                  aria-label={`Excluir pasta ${folder.filename}`}
-                >
-                  Excluir pasta inteira
-                </button>
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
-
       {importAudit && (
         <section className="imported-folders" aria-live="polite" aria-label="Resultado da importação">
           <div className="imported-folders-heading">
@@ -2541,6 +2514,52 @@ export default function DashboardPage() {
           </table>
         </div>
       </section>
+
+      {sessionInfo && (sessionInfo.role === "admin" || sessionInfo.role === "commercial") && activeTab !== "delinquent" && (
+        <section className="import-manager" aria-label="Gerenciar importações">
+          <div className="import-manager-header">
+            <div>
+              <strong>Gerenciar importações</strong>
+              <span>Organize e exclua arquivos importados sem comprometer outras carteiras.</span>
+            </div>
+            <button
+              className="ghost-btn"
+              type="button"
+              aria-expanded={showImportManager}
+              onClick={() => setShowImportManager((current) => !current)}
+            >
+              {showImportManager ? "Fechar gerenciamento" : `Gerenciar arquivos (${importedFolders.length})`}
+            </button>
+          </div>
+          {showImportManager && (
+            <div className="import-manager-content">
+              {importedFolders.length > 0 ? (
+                <div className="imported-folders-list">
+                {importedFolders.map((folder) => (
+                <div className="imported-folder-row" key={folder.key}>
+                <div>
+                <strong>{folder.filename}</strong>
+                <small>{folder.ids.length} registro(s) · {ownerById.get(folder.ownerId)?.display_name || "Responsável"}{folder.unitId ? ` · ${unitById.get(folder.unitId)?.name || "Unidade"}` : ""}</small>
+                </div>
+                <button
+                type="button"
+                className="delete-btn"
+                disabled={processing}
+                onClick={() => void deleteImportedFolder(folder)}
+                aria-label={`Excluir pasta ${folder.filename}`}
+                >
+                Excluir pasta inteira
+                </button>
+                </div>
+                ))}
+                </div>
+              ) : (
+                <p>Nenhum arquivo importado nesta carteira.</p>
+              )}
+            </div>
+          )}
+        </section>
+      )}
 
       <p className="footer-note">
         Oportunidades, inadimplentes e inativos permanecem em carteiras separadas. Inadimplentes mantêm o histórico financeiro diário e Inativos ficam focados em reativação.
