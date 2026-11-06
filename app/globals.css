@@ -4256,3 +4256,24 @@ html[data-theme="light"] .executive-hero-highlight {
   .imported-folder-row { flex-direction: column; align-items: stretch; }
   .imported-folder-row .delete-btn { width: 100%; }
 }
+
+
+/* Resultado da leitura e conferência de importações */
+.import-audit-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+.import-audit-grid > div {
+  padding: 14px;
+  border: 1px solid rgba(148, 163, 184, .24);
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.import-audit-grid strong { font-size: 25px; font-variant-numeric: tabular-nums; }
+.import-audit-grid small { font-size: 12px; opacity: .8; }
+@media (max-width: 700px) {
+  .import-audit-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
