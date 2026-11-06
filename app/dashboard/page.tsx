@@ -29,6 +29,17 @@ type Lead = {
   lastContractValue?: number;
 };
 
+type ImportAudit = {
+  filename: string;
+  read: number;
+  valid: number;
+  saved: number;
+  updated: number;
+  alreadyExistingOrRejected: number;
+  databaseCount: number | null;
+  warning: string | null;
+};
+
 type SessionInfo = {
   username: string;
   displayName: string;
@@ -768,6 +779,7 @@ export default function DashboardPage() {
   const [activeTab, setActiveTab] = useState<DemandType>("opportunity");
   const importTypeRef = useRef<DemandType>("opportunity");
   const [notice, setNotice] = useState("");
+  const [importAudit, setImportAudit] = useState<ImportAudit | null>(null);
   const [processing, setProcessing] = useState(false);
   const [sessionInfo, setSessionInfo] = useState<SessionInfo | null>(null);
 
@@ -1339,7 +1351,7 @@ export default function DashboardPage() {
     }
   }
 
-  async function addImported(items: Lead[]) {
+  async function addImported(items: Lead[], filename: string, sourceRows: number) {
     if (items.length && items.every((item) => item.tipo === "delinquent")) {
       await importDelinquentBatch(items);
       return;
@@ -1512,6 +1524,22 @@ export default function DashboardPage() {
     );
 
     const totalRead = items.length;
+    const allSavedRows = await supabaseAllRows<Pick<DbLead, "id" | "source" | "demand_type" | "owner_user_id">>(
+      "/rest/v1/commercial_leads?select=id,source,demand_type,owner_user_id&demand_type=eq." +
+      encodeURIComponent(items[0]?.tipo || "opportunity") + "&order=id.asc"
+    );
+    const databaseCount = allSavedRows.filter((row) =>
+      row.source.split(" • ")[0].trim() === filename &&
+      row.owner_user_id === currentScopeOwner
+    ).length;
+    const importWarning = (added + enriched + skipped < totalRead)
+      ? "A soma dos resultados não corresponde ao total lido. Confira o banco antes de reimportar."
+      : null;
+
+    setImportAudit({
+      filename, read: sourceRows, valid: totalRead, saved: added, updated: enriched,
+      alreadyExistingOrRejected: skipped, databaseCount, warning: importWarning
+    });
     const parts = [
       `Arquivo processado: ${totalRead} oportunidade(s) lida(s)`,
       `${added} novo(s) registro(s) salvo(s)`
@@ -1541,10 +1569,12 @@ export default function DashboardPage() {
 
     setProcessing(true);
     setNotice("");
+    setImportAudit(null);
 
     try {
       const ext = file.name.split(".").pop()?.toLowerCase();
       let imported: Lead[] = [];
+      let totalSourceRows = 0;
 
       if (["xlsx", "xls", "xlsm", "xlsb", "ods", "csv", "tsv"].includes(ext || "")) {
         const data = await file.arrayBuffer();
@@ -1556,6 +1586,7 @@ export default function DashboardPage() {
             { defval: "" }
           );
 
+          totalSourceRows += rows.length;
           imported.push(...rowsToLeads(rows, `${file.name} • ${sheetName}`));
         }
       } else if (ext === "json") {
@@ -1566,6 +1597,7 @@ export default function DashboardPage() {
             ? parsed.leads
             : [parsed];
 
+        totalSourceRows = rows.length;
         imported = rowsToLeads(rows, file.name);
       } else if (ext === "docx") {
         const result = await mammoth.extractRawText({
@@ -1603,6 +1635,7 @@ export default function DashboardPage() {
         );
       }
 
+      totalSourceRows ||= imported.length;
       imported = imported.map((lead) => {
         const resolvedCity =
           lead.cidade.trim() || resolveImportCity(lead.origem, units);
@@ -1616,7 +1649,7 @@ export default function DashboardPage() {
         };
       });
 
-      await addImported(imported);
+      await addImported(imported, file.name, totalSourceRows);
     } catch (err) {
       setNotice(
         err instanceof Error ? err.message : "Não foi possível importar o arquivo."
@@ -2197,6 +2230,24 @@ export default function DashboardPage() {
               </div>
             ))}
           </div>
+        </section>
+      )}
+
+      {importAudit && (
+        <section className="imported-folders" aria-live="polite" aria-label="Resultado da importação">
+          <div className="imported-folders-heading">
+            <strong>Conferência da importação: {importAudit.filename}</strong>
+            <span>Contagens da planilha e da resposta do Supabase. Não significa que todos os registros sejam novos.</span>
+          </div>
+          <div className="import-audit-grid">
+            <div><strong>{importAudit.read.toLocaleString("pt-BR")}</strong><small>Linhas na planilha</small></div>
+            <div><strong>{importAudit.valid.toLocaleString("pt-BR")}</strong><small>Contatos válidos lidos</small></div>
+            <div><strong>{importAudit.saved.toLocaleString("pt-BR")}</strong><small>Novos confirmados pela importação</small></div>
+            <div><strong>{importAudit.updated.toLocaleString("pt-BR")}</strong><small>Cadastros atualizados</small></div>
+            <div><strong>{importAudit.alreadyExistingOrRejected.toLocaleString("pt-BR")}</strong><small>Existentes ou não incluídos</small></div>
+            <div><strong>{importAudit.databaseCount === null ? "—" : importAudit.databaseCount.toLocaleString("pt-BR")}</strong><small>Registros atuais deste arquivo no banco</small></div>
+          </div>
+          {importAudit.warning && <p role="alert">{importAudit.warning}</p>}
         </section>
       )}
 
