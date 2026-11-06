@@ -973,7 +973,7 @@ export default function DashboardPage() {
       if (lead.tipo !== "opportunity" && lead.tipo !== "inactive") continue;
       const filename = lead.origem.split(" • ")[0].trim();
       if (!/\\.(xlsx?|xlsm|xlsb|ods|csv|tsv|txt|pdf|docx?|json)$/i.test(filename)) continue;
-      if (sessionInfo.unitId && lead.unitId !== sessionInfo.unitId) continue;
+      if (sessionInfo.role !== "admin" && sessionInfo.unitId && lead.unitId !== sessionInfo.unitId) continue;
       if (sessionInfo.role !== "admin" && lead.ownerUserId !== currentOwnerId) continue;
       if (!lead.ownerUserId) continue;
 
@@ -1006,7 +1006,7 @@ export default function DashboardPage() {
     if (!sessionInfo) return [];
     const search = normalizeHeader(fileSearch);
     return delinquentBatches.filter((batch) => {
-      if (sessionInfo.unitId && batch.unit_id !== sessionInfo.unitId) return false;
+      if (sessionInfo.role !== "admin" && sessionInfo.unitId && batch.unit_id !== sessionInfo.unitId) return false;
       if (sessionInfo.role !== "admin" && batch.owner_user_id !== currentOwnerId) return false;
       return !search || normalizeHeader([
         batch.source, "inadimplentes", batch.batch_date,
@@ -1734,6 +1734,7 @@ export default function DashboardPage() {
     if (processing || deletingImportRef.current || !sessionInfo) return;
     if (folder.demandType !== "opportunity" && folder.demandType !== "inactive") return;
     if (sessionInfo.role !== "admin" && folder.ownerId !== currentOwnerId) return;
+    if (sessionInfo.role !== "admin" && sessionInfo.unitId && folder.unitId !== sessionInfo.unitId) return;
 
     const ok = window.confirm(
       `Excluir a pasta "${folder.filename}" e seus ${folder.ids.length} registro(s)?\n\nEsta ação não poderá ser desfeita. Outras pastas não serão excluídas.`
