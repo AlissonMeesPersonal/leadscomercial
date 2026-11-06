@@ -200,6 +200,22 @@ async function supabaseRequest(path: string, init: RequestInit = {}) {
   return response;
 }
 
+// Supabase/PostgREST can cap each response at 1,000 rows.
+async function supabaseAllRows<T>(path: string): Promise<T[]> {
+  const pageSize = 500;
+  const rows: T[] = [];
+  const separator = path.includes("?") ? "&" : "?";
+  for (let offset = 0; ; offset += pageSize) {
+    const response = await supabaseRequest(
+      `${path}${separator}limit=${pageSize}&offset=${offset}`
+    );
+    const page = (await response.json()) as T[];
+    rows.push(...page);
+    if (page.length < pageSize) break;
+  }
+  return rows;
+}
+
 function normalizeHeader(value: string) {
   return value
     .normalize("NFD")
@@ -774,8 +790,8 @@ export default function DashboardPage() {
           delinquentItemResponse
         ] = await Promise.all([
           fetch("/api/session", { cache: "no-store" }),
-          supabaseRequest(
-            "/rest/v1/commercial_leads?select=id,name,whatsapp,email,city,source,status,demand_type,owner_user_id,unit_id,created_at&order=created_at.desc"
+          supabaseAllRows<DbLead>(
+            "/rest/v1/commercial_leads?select=id,name,whatsapp,email,city,source,status,demand_type,owner_user_id,unit_id,created_at&order=created_at.desc,id.desc"
           ),
           supabaseRequest(
             "/rest/v1/commercial_users?select=id,username,display_name,role&active=eq.true&order=display_name.asc"
@@ -783,11 +799,11 @@ export default function DashboardPage() {
           supabaseRequest(
             "/rest/v1/commercial_units?select=id,name,city&active=eq.true&order=name.asc"
           ),
-          supabaseRequest(
-            "/rest/v1/commercial_delinquent_batches?select=id,batch_date,owner_user_id,unit_id,source,created_at&order=batch_date.desc"
+          supabaseAllRows<DelinquentBatch>(
+            "/rest/v1/commercial_delinquent_batches?select=id,batch_date,owner_user_id,unit_id,source,created_at&order=batch_date.desc,id.desc"
           ),
-          supabaseRequest(
-            "/rest/v1/commercial_delinquent_items?select=id,batch_id,lead_id,initial_balance,recovered_amount,payment_status,due_date,payment_link,created_at&order=created_at.desc"
+          supabaseAllRows<DelinquentItem>(
+            "/rest/v1/commercial_delinquent_items?select=id,batch_id,lead_id,initial_balance,recovered_amount,payment_status,due_date,payment_link,created_at&order=created_at.desc,id.desc"
           )
         ]);
 
@@ -805,11 +821,11 @@ export default function DashboardPage() {
           delinquentItemRows
         ] = await Promise.all([
           sessionResponse.json() as Promise<SessionInfo>,
-          leadResponse.json() as Promise<DbLead[]>,
+          leadResponse,
           ownerResponse.json() as Promise<OwnerUser[]>,
           unitResponse.json() as Promise<UnitInfo[]>,
-          batchResponse.json() as Promise<DelinquentBatch[]>,
-          delinquentItemResponse.json() as Promise<DelinquentItem[]>
+          batchResponse,
+          delinquentItemResponse
         ]);
 
         if (!cancelled) {
@@ -855,21 +871,21 @@ export default function DashboardPage() {
 
       try {
         const [leadResponse, batchResponse, delinquentItemResponse] = await Promise.all([
-          supabaseRequest(
-            "/rest/v1/commercial_leads?select=id,name,whatsapp,email,city,source,status,demand_type,owner_user_id,unit_id,created_at&order=created_at.desc"
+          supabaseAllRows<DbLead>(
+            "/rest/v1/commercial_leads?select=id,name,whatsapp,email,city,source,status,demand_type,owner_user_id,unit_id,created_at&order=created_at.desc,id.desc"
           ),
-          supabaseRequest(
-            "/rest/v1/commercial_delinquent_batches?select=id,batch_date,owner_user_id,unit_id,source,created_at&order=batch_date.desc"
+          supabaseAllRows<DelinquentBatch>(
+            "/rest/v1/commercial_delinquent_batches?select=id,batch_date,owner_user_id,unit_id,source,created_at&order=batch_date.desc,id.desc"
           ),
-          supabaseRequest(
-            "/rest/v1/commercial_delinquent_items?select=id,batch_id,lead_id,initial_balance,recovered_amount,payment_status,due_date,payment_link,created_at&order=created_at.desc"
+          supabaseAllRows<DelinquentItem>(
+            "/rest/v1/commercial_delinquent_items?select=id,batch_id,lead_id,initial_balance,recovered_amount,payment_status,due_date,payment_link,created_at&order=created_at.desc,id.desc"
           )
         ]);
 
         const [rows, batchRows, delinquentItemRows] = await Promise.all([
-          leadResponse.json() as Promise<DbLead[]>,
-          batchResponse.json() as Promise<DelinquentBatch[]>,
-          delinquentItemResponse.json() as Promise<DelinquentItem[]>
+          leadResponse,
+          batchResponse,
+          delinquentItemResponse
         ]);
 
         if (!cancelled && !deletingImportRef.current) {
@@ -893,7 +909,7 @@ export default function DashboardPage() {
 
     const timer = window.setInterval(() => {
       void refreshLeads();
-    }, 4000);
+    }, 10000);
 
     const handleFocus = () => {
       void refreshLeads();
@@ -937,7 +953,7 @@ export default function DashboardPage() {
     for (const lead of tabLeads) {
       // A planilha pode ter várias abas; todas pertencem ao mesmo arquivo.
       const filename = lead.origem.split(" • ")[0].trim();
-      if (!/\.(xlsx?|csv|txt|pdf|docx?)$/i.test(filename)) continue;
+      if (!/\.(xlsx?|xlsm|xlsb|ods|csv|tsv|txt|pdf|docx?|json)$/i.test(filename)) continue;
       if (sessionInfo.unitId && lead.unitId !== sessionInfo.unitId) continue;
       if (sessionInfo.role === "commercial" && lead.ownerUserId !== currentOwnerId) continue;
       if (!lead.ownerUserId) continue;
@@ -1177,21 +1193,21 @@ export default function DashboardPage() {
 
   async function reloadDelinquentTracking() {
     const [leadResponse, batchResponse, delinquentItemResponse] = await Promise.all([
-      supabaseRequest(
-        "/rest/v1/commercial_leads?select=id,name,whatsapp,email,city,source,status,demand_type,owner_user_id,unit_id,created_at&order=created_at.desc"
+      supabaseAllRows<DbLead>(
+        "/rest/v1/commercial_leads?select=id,name,whatsapp,email,city,source,status,demand_type,owner_user_id,unit_id,created_at&order=created_at.desc,id.desc"
       ),
-      supabaseRequest(
-        "/rest/v1/commercial_delinquent_batches?select=id,batch_date,owner_user_id,unit_id,source,created_at&order=batch_date.desc"
+      supabaseAllRows<DelinquentBatch>(
+        "/rest/v1/commercial_delinquent_batches?select=id,batch_date,owner_user_id,unit_id,source,created_at&order=batch_date.desc,id.desc"
       ),
-      supabaseRequest(
-        "/rest/v1/commercial_delinquent_items?select=id,batch_id,lead_id,initial_balance,recovered_amount,payment_status,due_date,payment_link,created_at&order=created_at.desc"
+      supabaseAllRows<DelinquentItem>(
+        "/rest/v1/commercial_delinquent_items?select=id,batch_id,lead_id,initial_balance,recovered_amount,payment_status,due_date,payment_link,created_at&order=created_at.desc,id.desc"
       )
     ]);
 
     const [leadRows, batchRows, delinquentItemRows] = await Promise.all([
-      leadResponse.json() as Promise<DbLead[]>,
-      batchResponse.json() as Promise<DelinquentBatch[]>,
-      delinquentItemResponse.json() as Promise<DelinquentItem[]>
+      leadResponse,
+      batchResponse,
+      delinquentItemResponse
     ]);
 
     setLeads(leadRows.map(mapDbLead));
@@ -1649,16 +1665,16 @@ export default function DashboardPage() {
     let completed = false;
     try {
       // Confirma o conjunto existente no servidor para não operar com uma lista antiga.
-      const beforeResponse = await supabaseRequest(
+      const before = await supabaseAllRows<{
+        id: string; source: string; demand_type: DemandType;
+        owner_user_id: string | null; unit_id: string | null;
+      }>(
         "/rest/v1/commercial_leads?select=id,source,demand_type,owner_user_id,unit_id&demand_type=eq." +
         encodeURIComponent(activeTab) +
         "&owner_user_id=eq." + encodeURIComponent(folder.ownerId) +
-        "&unit_id=" + (folder.unitId ? "eq." + encodeURIComponent(folder.unitId) : "is.null")
+        "&unit_id=" + (folder.unitId ? "eq." + encodeURIComponent(folder.unitId) : "is.null") +
+        "&order=id.asc"
       );
-      const before = (await beforeResponse.json()) as {
-        id: string; source: string; demand_type: DemandType;
-        owner_user_id: string | null; unit_id: string | null;
-      }[];
       const ids = before
         .filter((item) => item.source.split(" • ")[0].trim() === folder.filename)
         .map((item) => item.id);
@@ -1683,13 +1699,13 @@ export default function DashboardPage() {
       }
 
       // Confere novamente no banco: só informa sucesso quando a pasta realmente sumiu.
-      const remainingResponse = await supabaseRequest(
+      const remaining = await supabaseAllRows<{ id: string; source: string }>(
         "/rest/v1/commercial_leads?select=id,source&demand_type=eq." +
         encodeURIComponent(activeTab) +
         "&owner_user_id=eq." + encodeURIComponent(folder.ownerId) +
-        "&unit_id=" + (folder.unitId ? "eq." + encodeURIComponent(folder.unitId) : "is.null")
+        "&unit_id=" + (folder.unitId ? "eq." + encodeURIComponent(folder.unitId) : "is.null") +
+        "&order=id.asc"
       );
-      const remaining = (await remainingResponse.json()) as { id: string; source: string }[];
       if (remaining.some((item) => item.source.split(" • ")[0].trim() === folder.filename)) {
         throw new Error("Ainda existem registros desta pasta no banco. A exclusão não foi concluída.");
       }
@@ -1702,10 +1718,9 @@ export default function DashboardPage() {
       );
     } finally {
       try {
-        const response = await supabaseRequest(
-          "/rest/v1/commercial_leads?select=id,name,whatsapp,email,city,source,status,demand_type,owner_user_id,unit_id,created_at&order=created_at.desc"
+        const rows = await supabaseAllRows<DbLead>(
+          "/rest/v1/commercial_leads?select=id,name,whatsapp,email,city,source,status,demand_type,owner_user_id,unit_id,created_at&order=created_at.desc,id.desc"
         );
-        const rows = (await response.json()) as DbLead[];
         setLeads(rows.map(mapDbLead));
         if (completed) {
           const stillHasCity = rows.some(
