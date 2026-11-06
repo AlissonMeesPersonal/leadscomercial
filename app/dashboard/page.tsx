@@ -780,7 +780,8 @@ export default function DashboardPage() {
   const importTypeRef = useRef<DemandType>("opportunity");
   const [notice, setNotice] = useState("");
   const [importAudit, setImportAudit] = useState<ImportAudit | null>(null);
-  const [showImportManager, setShowImportManager] = useState(false);
+  const [showFilesTab, setShowFilesTab] = useState(false);
+  const [fileSearch, setFileSearch] = useState("");
   const [processing, setProcessing] = useState(false);
   const [sessionInfo, setSessionInfo] = useState<SessionInfo | null>(null);
 
@@ -957,30 +958,59 @@ export default function DashboardPage() {
   );
 
   const importedFolders = useMemo(() => {
-    if (activeTab === "delinquent" || !sessionInfo || (sessionInfo.role === "commercial" && !currentOwnerId)) return [];
+    if (!sessionInfo || (sessionInfo.role === "commercial" && !currentOwnerId)) return [];
 
     const folders = new Map<string, {
-      key: string; filename: string; ownerId: string; unitId: string | null; ids: string[];
+      key: string; filename: string; ownerId: string; unitId: string | null;
+      demandType: "opportunity" | "inactive"; ids: string[];
     }>();
 
-    for (const lead of tabLeads) {
-      // A planilha pode ter várias abas; todas pertencem ao mesmo arquivo.
+    for (const lead of leads) {
+      if (lead.tipo !== "opportunity" && lead.tipo !== "inactive") continue;
       const filename = lead.origem.split(" • ")[0].trim();
-      if (!/\.(xlsx?|xlsm|xlsb|ods|csv|tsv|txt|pdf|docx?|json)$/i.test(filename)) continue;
+      if (!/\\.(xlsx?|xlsm|xlsb|ods|csv|tsv|txt|pdf|docx?|json)$/i.test(filename)) continue;
       if (sessionInfo.unitId && lead.unitId !== sessionInfo.unitId) continue;
       if (sessionInfo.role === "commercial" && lead.ownerUserId !== currentOwnerId) continue;
       if (!lead.ownerUserId) continue;
 
-      const key = JSON.stringify([filename, lead.ownerUserId, lead.unitId]);
+      const key = JSON.stringify([lead.tipo, filename, lead.ownerUserId, lead.unitId]);
       const folder = folders.get(key) || {
-        key, filename, ownerId: lead.ownerUserId, unitId: lead.unitId, ids: []
+        key, filename, ownerId: lead.ownerUserId, unitId: lead.unitId,
+        demandType: lead.tipo, ids: []
       };
       folder.ids.push(lead.id);
       folders.set(key, folder);
     }
 
     return [...folders.values()].sort((a, b) => a.filename.localeCompare(b.filename, "pt-BR"));
-  }, [activeTab, sessionInfo, currentOwnerId, tabLeads]);
+  }, [leads, sessionInfo, currentOwnerId]);
+
+  const visibleImportedFolders = useMemo(() => {
+    const search = normalizeHeader(fileSearch);
+    return importedFolders.filter((folder) => {
+      if (!search) return true;
+      return normalizeHeader([
+        folder.filename,
+        folder.demandType === "inactive" ? "inativos" : "oportunidades",
+        owners.find((owner) => owner.id === folder.ownerId)?.display_name || "",
+        units.find((unit) => unit.id === folder.unitId)?.name || ""
+      ].join(" ")).includes(search);
+    });
+  }, [importedFolders, fileSearch, owners, units]);
+
+  const visibleDelinquentImports = useMemo(() => {
+    if (!sessionInfo) return [];
+    const search = normalizeHeader(fileSearch);
+    return delinquentBatches.filter((batch) => {
+      if (sessionInfo.unitId && batch.unit_id !== sessionInfo.unitId) return false;
+      if (sessionInfo.role === "commercial" && batch.owner_user_id !== currentOwnerId) return false;
+      return !search || normalizeHeader([
+        batch.source, "inadimplentes", batch.batch_date,
+        owners.find((owner) => owner.id === batch.owner_user_id)?.display_name || "",
+        units.find((unit) => unit.id === batch.unit_id)?.name || ""
+      ].join(" ")).includes(search);
+    });
+  }, [sessionInfo, delinquentBatches, currentOwnerId, fileSearch, owners, units]);
 
   const unitById = useMemo(
     () => new Map(units.map((unit) => [unit.id, unit] as const)),
@@ -1698,6 +1728,7 @@ export default function DashboardPage() {
 
   async function deleteImportedFolder(folder: (typeof importedFolders)[number]) {
     if (processing || deletingImportRef.current || !sessionInfo || !["admin", "commercial"].includes(sessionInfo.role)) return;
+    if (folder.demandType !== "opportunity" && folder.demandType !== "inactive") return;
     if (sessionInfo.role === "commercial" && folder.ownerId !== currentOwnerId) return;
 
     const ok = window.confirm(
@@ -1715,7 +1746,7 @@ export default function DashboardPage() {
         owner_user_id: string | null; unit_id: string | null;
       }>(
         "/rest/v1/commercial_leads?select=id,source,demand_type,owner_user_id,unit_id&demand_type=eq." +
-        encodeURIComponent(activeTab) +
+        encodeURIComponent(folder.demandType) +
         "&owner_user_id=eq." + encodeURIComponent(folder.ownerId) +
         "&unit_id=" + (folder.unitId ? "eq." + encodeURIComponent(folder.unitId) : "is.null") +
         "&order=id.asc"
@@ -1734,7 +1765,7 @@ export default function DashboardPage() {
       for (let index = 0; index < ids.length; index += 75) {
         const chunk = ids.slice(index, index + 75);
         const response = await supabaseRequest(
-          `/rest/v1/commercial_leads?id=in.(${chunk.map(encodeURIComponent).join(",")})&demand_type=eq.${activeTab}&owner_user_id=eq.${encodeURIComponent(folder.ownerId)}&unit_id=${folder.unitId ? `eq.${encodeURIComponent(folder.unitId)}` : "is.null"}&select=id`,
+          `/rest/v1/commercial_leads?id=in.(${chunk.map(encodeURIComponent).join(",")})&demand_type=eq.${folder.demandType}&owner_user_id=eq.${encodeURIComponent(folder.ownerId)}&unit_id=${folder.unitId ? `eq.${encodeURIComponent(folder.unitId)}` : "is.null"}&select=id`,
           { method: "DELETE", headers: { Prefer: "return=representation" } }
         );
         const deleted = (await response.json()) as { id: string }[];
@@ -1746,7 +1777,7 @@ export default function DashboardPage() {
       // Confere novamente no banco: só informa sucesso quando a pasta realmente sumiu.
       const remaining = await supabaseAllRows<{ id: string; source: string }>(
         "/rest/v1/commercial_leads?select=id,source&demand_type=eq." +
-        encodeURIComponent(activeTab) +
+        encodeURIComponent(folder.demandType) +
         "&owner_user_id=eq." + encodeURIComponent(folder.ownerId) +
         "&unit_id=" + (folder.unitId ? "eq." + encodeURIComponent(folder.unitId) : "is.null") +
         "&order=id.asc"
@@ -1975,6 +2006,7 @@ export default function DashboardPage() {
   ).length;
 
   function changeTab(tab: DemandType) {
+    setShowFilesTab(false);
     setActiveTab(tab);
     setOwnerFilter("Todos");
     setStatusFilter("Todos");
@@ -2028,7 +2060,7 @@ export default function DashboardPage() {
             hidden
           />
 
-          <button
+          {!showFilesTab && <button
             className={
               activeTab === "delinquent"
                 ? "delinquent-import-btn"
@@ -2046,7 +2078,7 @@ export default function DashboardPage() {
                 : activeTab === "inactive"
                   ? "+ Importar inativos"
                   : "+ Importar oportunidades"}
-          </button>
+          </button>}
 
           <button className="ghost-btn" onClick={logout}>
             Sair
@@ -2081,8 +2113,68 @@ export default function DashboardPage() {
           <span>Inativos</span>
           <strong>{inactiveCount}</strong>
         </button>
+        {sessionInfo && (sessionInfo.role === "admin" || sessionInfo.role === "commercial") && (
+          <button
+            type="button"
+            className={showFilesTab ? "demand-tab files active" : "demand-tab files"}
+            onClick={() => { setShowFilesTab(true); setNotice(""); }}
+          >
+            <span>Gerenciar arquivos</span>
+            <strong>{importedFolders.length + visibleDelinquentImports.length}</strong>
+          </button>
+        )}
       </section>
 
+      {showFilesTab ? (
+        <section className="file-manager-page" aria-label="Gerenciamento de arquivos importados">
+          <div className="file-manager-title">
+            <div>
+              <p className="eyebrow">ARQUIVOS IMPORTADOS</p>
+              <h2>Gerenciar arquivos</h2>
+              <p>Consulte os arquivos de todas as carteiras e exclua importações de oportunidades e inativos com confirmação.</p>
+            </div>
+            <span className="file-manager-total">{importedFolders.length + visibleDelinquentImports.length} importações</span>
+          </div>
+          <label className="file-manager-search">
+            <span>Buscar por arquivo, carteira, unidade ou responsável</span>
+            <input
+              type="search"
+              value={fileSearch}
+              onChange={(event) => setFileSearch(event.target.value)}
+              placeholder="Buscar arquivos importados..."
+            />
+          </label>
+          {notice && <div className="notice" role="status">{notice}</div>}
+          <div className="file-manager-list">
+            {visibleImportedFolders.map((folder) => (
+              <article className="file-manager-item" key={folder.key}>
+                <div className="file-manager-info">
+                  <strong>{folder.filename}</strong>
+                  <span>{folder.demandType === "inactive" ? "Inativos" : "Oportunidades"} · {folder.ids.length.toLocaleString("pt-BR")} registros</span>
+                  <small>{ownerById.get(folder.ownerId)?.display_name || "Responsável"} · {folder.unitId ? unitById.get(folder.unitId)?.name || "Unidade" : "Sem unidade definida"}</small>
+                </div>
+                <button type="button" className="delete-btn" disabled={processing}
+                  onClick={() => void deleteImportedFolder(folder)}>
+                  Excluir pasta inteira
+                </button>
+              </article>
+            ))}
+            {visibleDelinquentImports.map((batch) => (
+              <article className="file-manager-item" key={`delinquent-${batch.id}`}>
+                <div className="file-manager-info">
+                  <strong>{batch.source || "Importação de inadimplentes"}</strong>
+                  <span>Inadimplentes · {batch.batch_date.split("-").reverse().join("/")}</span>
+                  <small>{ownerById.get(batch.owner_user_id)?.display_name || "Responsável"} · {batch.unit_id ? unitById.get(batch.unit_id)?.name || "Unidade" : "Sem unidade definida"}</small>
+                </div>
+                <a className="ghost-btn" href="/dashboard/inadimplentes">Ver histórico</a>
+              </article>
+            ))}
+            {!visibleImportedFolders.length && !visibleDelinquentImports.length && (
+              <p className="file-manager-empty">Nenhum arquivo encontrado.</p>
+            )}
+          </div>
+        </section>
+      ) : (<>
       {activeTab === "delinquent" ? (
         <section className="metrics metrics-six delinquent-recovery-metrics">
           <article>
@@ -2515,51 +2607,7 @@ export default function DashboardPage() {
         </div>
       </section>
 
-      {sessionInfo && (sessionInfo.role === "admin" || sessionInfo.role === "commercial") && activeTab !== "delinquent" && (
-        <section className="import-manager" aria-label="Gerenciar importações">
-          <div className="import-manager-header">
-            <div>
-              <strong>Gerenciar importações</strong>
-              <span>Organize e exclua arquivos importados sem comprometer outras carteiras.</span>
-            </div>
-            <button
-              className="ghost-btn"
-              type="button"
-              aria-expanded={showImportManager}
-              onClick={() => setShowImportManager((current) => !current)}
-            >
-              {showImportManager ? "Fechar gerenciamento" : `Gerenciar arquivos (${importedFolders.length})`}
-            </button>
-          </div>
-          {showImportManager && (
-            <div className="import-manager-content">
-              {importedFolders.length > 0 ? (
-                <div className="imported-folders-list">
-                {importedFolders.map((folder) => (
-                <div className="imported-folder-row" key={folder.key}>
-                <div>
-                <strong>{folder.filename}</strong>
-                <small>{folder.ids.length} registro(s) · {ownerById.get(folder.ownerId)?.display_name || "Responsável"}{folder.unitId ? ` · ${unitById.get(folder.unitId)?.name || "Unidade"}` : ""}</small>
-                </div>
-                <button
-                type="button"
-                className="delete-btn"
-                disabled={processing}
-                onClick={() => void deleteImportedFolder(folder)}
-                aria-label={`Excluir pasta ${folder.filename}`}
-                >
-                Excluir pasta inteira
-                </button>
-                </div>
-                ))}
-                </div>
-              ) : (
-                <p>Nenhum arquivo importado nesta carteira.</p>
-              )}
-            </div>
-          )}
-        </section>
-      )}
+      </>)}
 
       <p className="footer-note">
         Oportunidades, inadimplentes e inativos permanecem em carteiras separadas. Inadimplentes mantêm o histórico financeiro diário e Inativos ficam focados em reativação.
