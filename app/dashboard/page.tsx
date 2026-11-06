@@ -1524,14 +1524,20 @@ export default function DashboardPage() {
     );
 
     const totalRead = items.length;
-    const allSavedRows = await supabaseAllRows<Pick<DbLead, "id" | "source" | "demand_type" | "owner_user_id">>(
-      "/rest/v1/commercial_leads?select=id,source,demand_type,owner_user_id&demand_type=eq." +
-      encodeURIComponent(items[0]?.tipo || "opportunity") + "&order=id.asc"
-    );
-    const databaseCount = allSavedRows.filter((row) =>
-      row.source.split(" • ")[0].trim() === filename &&
-      row.owner_user_id === currentScopeOwner
-    ).length;
+    let databaseCount: number | null = null;
+    try {
+      const allSavedRows = await supabaseAllRows<Pick<DbLead, "id" | "source" | "demand_type" | "owner_user_id">>(
+        "/rest/v1/commercial_leads?select=id,source,demand_type,owner_user_id&demand_type=eq." +
+        encodeURIComponent(items[0]?.tipo || "opportunity") + "&order=id.asc"
+      );
+      databaseCount = allSavedRows.filter((row) =>
+        row.source.split(" • ")[0].trim() === filename &&
+        row.owner_user_id === currentScopeOwner
+      ).length;
+    } catch {
+      // Uma consulta de auditoria não deve ocultar uma importação já concluída.
+      databaseCount = null;
+    }
     const importWarning = (added + enriched + skipped < totalRead)
       ? "A soma dos resultados não corresponde ao total lido. Confira o banco antes de reimportar."
       : null;
