@@ -2089,7 +2089,7 @@ export default function DashboardPage() {
       <section className="demand-tabs" aria-label="Tipo de demanda">
         <button
           type="button"
-          className={activeTab === "opportunity" ? "demand-tab active opportunity" : "demand-tab opportunity"}
+          className={!showFilesTab && activeTab === "opportunity" ? "demand-tab active opportunity" : "demand-tab opportunity"}
           onClick={() => changeTab("opportunity")}
         >
           <span>Oportunidades</span>
@@ -2098,7 +2098,7 @@ export default function DashboardPage() {
 
         <button
           type="button"
-          className={activeTab === "delinquent" ? "demand-tab active delinquent" : "demand-tab delinquent"}
+          className={!showFilesTab && activeTab === "delinquent" ? "demand-tab active delinquent" : "demand-tab delinquent"}
           onClick={() => changeTab("delinquent")}
         >
           <span>Inadimplentes</span>
@@ -2107,7 +2107,7 @@ export default function DashboardPage() {
 
         <button
           type="button"
-          className={activeTab === "inactive" ? "demand-tab active inactive" : "demand-tab inactive"}
+          className={!showFilesTab && activeTab === "inactive" ? "demand-tab active inactive" : "demand-tab inactive"}
           onClick={() => changeTab("inactive")}
         >
           <span>Inativos</span>
