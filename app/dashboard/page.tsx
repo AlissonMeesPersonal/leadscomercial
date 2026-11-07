@@ -977,7 +977,7 @@ export default function DashboardPage() {
 
     const folders = new Map<string, {
       key: string; filename: string; ownerId: string; unitId: string | null;
-      demandType: "opportunity" | "inactive"; ids: string[];
+      demandType: "opportunity" | "inactive"; ids: string[]; importedAt: string | null;
     }>();
 
     for (const lead of leads) {
@@ -991,9 +991,12 @@ export default function DashboardPage() {
       const key = JSON.stringify([lead.tipo, filename, lead.ownerUserId, lead.unitId]);
       const folder = folders.get(key) || {
         key, filename, ownerId: lead.ownerUserId, unitId: lead.unitId,
-        demandType: lead.tipo, ids: []
+        demandType: lead.tipo, ids: [], importedAt: lead.criadoEm
       };
       folder.ids.push(lead.id);
+      if (!folder.importedAt || new Date(lead.criadoEm).getTime() < new Date(folder.importedAt).getTime()) {
+        folder.importedAt = lead.criadoEm;
+      }
       folders.set(key, folder);
     }
 
@@ -2193,7 +2196,13 @@ export default function DashboardPage() {
               <article className="file-manager-item" key={folder.key}>
                 <div className="file-manager-info">
                   <strong>{folder.filename}</strong>
-                  <span>{folder.demandType === "inactive" ? "Inativos" : "Oportunidades"} · {folder.ids.length.toLocaleString("pt-BR")} registros</span>
+                  <span>{folder.demandType === "inactive" ? "Inativos" : "Oportunidades"}</span>
+                  <div className="file-manager-stats">
+                    <div><small>Importado em (primeiro registro)</small><strong>{folder.importedAt ? new Date(folder.importedAt).toLocaleDateString("pt-BR") : "Não disponível"}</strong></div>
+                    <div><small>Registros atuais</small><strong>{folder.ids.length.toLocaleString("pt-BR")}</strong></div>
+                    <div><small>Novos cadastrados na importação</small><strong>Sem histórico</strong></div>
+                    <div><small>Não cadastrados</small><strong>Sem histórico</strong></div>
+                  </div>
                   <small>{ownerById.get(folder.ownerId)?.display_name || "Responsável"} · {folder.unitId ? unitById.get(folder.unitId)?.name || "Unidade" : "Sem unidade definida"}</small>
                 </div>
                 <button type="button" className="delete-btn" disabled={processing}
@@ -2206,7 +2215,11 @@ export default function DashboardPage() {
               <article className="file-manager-item" key={`delinquent-${batch.id}`}>
                 <div className="file-manager-info">
                   <strong>{batch.source || "Importação de inadimplentes"}</strong>
-                  <span>Inadimplentes · {batch.batch_date.split("-").reverse().join("/")}</span>
+                  <span>Inadimplentes · carteira {batch.batch_date.split("-").reverse().join("/")}</span>
+                  <div className="file-manager-stats">
+                    <div><small>Importado em</small><strong>{new Date(batch.created_at).toLocaleDateString("pt-BR")}</strong></div>
+                    <div><small>Novos / não cadastrados</small><strong>Sem histórico</strong></div>
+                  </div>
                   <small>{ownerById.get(batch.owner_user_id)?.display_name || "Responsável"} · {batch.unit_id ? unitById.get(batch.unit_id)?.name || "Unidade" : "Sem unidade definida"}</small>
                 </div>
                 <a className="ghost-btn" href="/dashboard/inadimplentes">Ver histórico</a>
