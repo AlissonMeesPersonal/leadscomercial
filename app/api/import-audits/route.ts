@@ -72,7 +72,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Importação inválida." }, { status: 400 });
   }
   const fields = ["sourceRows", "validRows", "saved", "updated", "notInserted"] as const;
-  if (fields.some(field => !Number.isSafeInteger(input[field]) || Number(input[field]) < 0 || Number(input[field]) > 1000000)) {
+  if (fields.some(field => typeof input[field] !== "number" || !Number.isSafeInteger(input[field]) || Number(input[field]) < 0 || Number(input[field]) > 1000000)) {
     return NextResponse.json({ error: "Contagem inválida." }, { status: 400 });
   }
   const record = {
