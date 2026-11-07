@@ -29,6 +29,20 @@ type Lead = {
   lastContractValue?: number;
 };
 
+type SavedImportAudit = {
+  id: string;
+  owner_user_id: string;
+  unit_id: string | null;
+  demand_type: "opportunity" | "inactive";
+  filename: string;
+  imported_at: string;
+  source_rows: number;
+  valid_rows: number;
+  inserted_rows: number;
+  updated_rows: number;
+  not_inserted_rows: number;
+};
+
 type ImportAudit = {
   filename: string;
   read: number;
@@ -792,6 +806,7 @@ export default function DashboardPage() {
   const importTypeRef = useRef<DemandType>("opportunity");
   const [notice, setNotice] = useState("");
   const [importAudit, setImportAudit] = useState<ImportAudit | null>(null);
+  const [savedImportAudits, setSavedImportAudits] = useState<SavedImportAudit[]>([]);
   const [showFilesTab, setShowFilesTab] = useState(false);
   const [fileSearch, setFileSearch] = useState("");
   const [processing, setProcessing] = useState(false);
@@ -950,6 +965,23 @@ export default function DashboardPage() {
     };
   }, [loaded, sessionInfo]);
 
+  useEffect(() => {
+    if (!loaded || !sessionInfo) return;
+    let canceled = false;
+    async function loadAudits() {
+      try {
+        const response = await fetch("/api/import-audits", { cache: "no-store" });
+        if (!response.ok) return; // Migração opcional ainda não aplicada.
+        const audits = await response.json() as SavedImportAudit[];
+        if (!canceled) setSavedImportAudits(audits);
+      } catch {
+        // Histórico indisponível: contagens atuais permanecem visíveis.
+      }
+    }
+    void loadAudits();
+    return () => { canceled = true; };
+  }, [loaded, sessionInfo]);
+
   const ownerById = useMemo(
     () => new Map(owners.map((owner) => [owner.id, owner] as const)),
     [owners]
@@ -1002,6 +1034,18 @@ export default function DashboardPage() {
 
     return [...folders.values()].sort((a, b) => a.filename.localeCompare(b.filename, "pt-BR"));
   }, [leads, sessionInfo, currentOwnerId]);
+
+  const auditByFolder = useMemo(() => {
+    const map = new Map<string, SavedImportAudit>();
+    for (const audit of savedImportAudits) {
+      const key = JSON.stringify([audit.demand_type, audit.filename, audit.owner_user_id]);
+      const prior = map.get(key);
+      if (!prior || new Date(audit.imported_at).getTime() > new Date(prior.imported_at).getTime()) {
+        map.set(key, audit);
+      }
+    }
+    return map;
+  }, [savedImportAudits]);
 
   const visibleImportedFolders = useMemo(() => {
     const search = normalizeHeader(fileSearch);
@@ -1622,6 +1666,28 @@ export default function DashboardPage() {
       filename, read: sourceRows, valid: totalRead, saved: added, updated: enriched,
       alreadyExistingOrRejected: skipped, databaseCount, warning: importWarning
     });
+    // Registra os números da operação para as futuras visitas ao Gerenciar arquivos.
+    // Não transforma um histórico antigo desconhecido em valor zero.
+    try {
+      const response = await fetch("/api/import-audits", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          filename, demandType: items[0]?.tipo || "opportunity",
+          unitId: sessionInfo?.unitId || null, sourceRows, validRows: totalRead,
+          saved: added, updated: enriched, notInserted: skipped
+        })
+      });
+      if (response.ok) {
+        const audit = await response.json() as SavedImportAudit;
+        setSavedImportAudits((previous) => [audit, ...previous]);
+      } else {
+        setNotice("A importação foi executada, mas o histórico permanente ainda precisa ser configurado no Supabase.");
+      }
+    } catch {
+      setNotice("A importação foi executada, mas não foi possível registrar o histórico permanente.");
+    }
+
     const parts = [
       `Arquivo processado: ${totalRead} oportunidade(s) lida(s)`,
       `${added} novo(s) registro(s) salvo(s)`
@@ -2197,12 +2263,19 @@ export default function DashboardPage() {
                 <div className="file-manager-info">
                   <strong>{folder.filename}</strong>
                   <span>{folder.demandType === "inactive" ? "Inativos" : "Oportunidades"}</span>
-                  <div className="file-manager-stats">
-                    <div><small>Importado em (primeiro registro)</small><strong>{folder.importedAt ? new Date(folder.importedAt).toLocaleDateString("pt-BR") : "Não disponível"}</strong></div>
-                    <div><small>Registros atuais</small><strong>{folder.ids.length.toLocaleString("pt-BR")}</strong></div>
-                    <div><small>Novos cadastrados na importação</small><strong>Sem histórico</strong></div>
-                    <div><small>Não cadastrados</small><strong>Sem histórico</strong></div>
-                  </div>
+                  {(() => {
+                    const audit = auditByFolder.get(JSON.stringify([folder.demandType, folder.filename, folder.ownerId]));
+                    return (
+                      <div className="file-manager-stats">
+                        <div><small>Data da importação{audit ? " (última)" : " (primeiro registro)"}</small><strong>{audit ? new Date(audit.imported_at).toLocaleString("pt-BR") : folder.importedAt ? new Date(folder.importedAt).toLocaleDateString("pt-BR") : "Não disponível"}</strong></div>
+                        <div><small>Linhas do arquivo{audit ? " (última importação)" : ""}</small><strong>{audit ? audit.source_rows.toLocaleString("pt-BR") : "Sem histórico"}</strong></div>
+                        <div><small>Novos cadastrados{audit ? " (última importação)" : ""}</small><strong>{audit ? audit.inserted_rows.toLocaleString("pt-BR") : "Sem histórico"}</strong></div>
+                        <div><small>Não cadastrados{audit ? " (última importação)" : ""}</small><strong>{audit ? audit.not_inserted_rows.toLocaleString("pt-BR") : "Sem histórico"}</strong></div>
+                        <div><small>Registros atualmente na pasta</small><strong>{folder.ids.length.toLocaleString("pt-BR")}</strong></div>
+                        {audit && <div><small>Cadastros atualizados (última importação)</small><strong>{audit.updated_rows.toLocaleString("pt-BR")}</strong></div>}
+                      </div>
+                    );
+                  })()}
                   <small>{ownerById.get(folder.ownerId)?.display_name || "Responsável"} · {folder.unitId ? unitById.get(folder.unitId)?.name || "Unidade" : "Sem unidade definida"}</small>
                 </div>
                 <button type="button" className="delete-btn" disabled={processing}
