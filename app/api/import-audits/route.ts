@@ -65,7 +65,7 @@ export async function POST(request: Request) {
   const filename = typeof input.filename === "string" ? input.filename.trim() : "";
   const demand = input.demandType;
   const unitId = typeof input.unitId === "string" ? input.unitId : null;
-  if (!filename || filename.length > 255 || !/\\.(xlsx?|xlsm|xlsb|ods|csv|tsv|txt|pdf|docx?|json)$/i.test(filename)
+  if (!filename || filename.length > 255 || !/\.(xlsx?|xlsm|xlsb|ods|csv|tsv|txt|pdf|docx?|json)$/i.test(filename)
     || (demand !== "opportunity" && demand !== "inactive")
     || (unitId && !/^[0-9a-f-]{36}$/i.test(unitId))
     || (!ctx.admin && ctx.session.unitId && unitId !== ctx.session.unitId)) {
