@@ -1249,6 +1249,20 @@ export default function DashboardPage() {
     });
   }, [dateScopedLeads, query, statusFilter, ownerFilter, ownerById, sortOrder]);
 
+  const filteredStatusCounts = useMemo(() => {
+    const counts: Record<Status, number> = {
+      "Novo": 0,
+      "Em contato": 0,
+      "Interessado": 0,
+      "Sem retorno": 0,
+      "Convertido": 0
+    };
+    for (const lead of filtered) {
+      if (lead.status in counts) counts[lead.status] += 1;
+    }
+    return counts;
+  }, [filtered]);
+
   async function reloadDelinquentTracking() {
     const [leadResponse, batchResponse, delinquentItemResponse] = await Promise.all([
       supabaseAllRows<DbLead>(
@@ -2441,6 +2455,24 @@ export default function DashboardPage() {
           </select>
         </div>
 
+        <div className="lead-status-overview" aria-label="Situação dos contatos exibidos">
+          <span className="lead-status-overview-title">
+            {filtered.length.toLocaleString("pt-BR")} contato(s) exibido(s) com os filtros atuais
+          </span>
+          <div className="lead-status-overview-items">
+            {statusList.map((status) => (
+              <span
+                key={status}
+                className={`lead-status-count status-${statusClass(status)}`}
+                title={`${filteredStatusCounts[status]} contato(s) em ${status}`}
+              >
+                <span className="lead-status-dot" aria-hidden="true" />
+                {activeTab === "inactive" && status === "Convertido" ? "Reativado" : status}
+                <strong>{filteredStatusCounts[status].toLocaleString("pt-BR")}</strong>
+              </span>
+            ))}
+          </div>
+        </div>
         <div className="table-wrap">
           <table className={activeTab === "delinquent" ? "demand-table delinquent-finance-table" : "demand-table"}>
             <thead>
