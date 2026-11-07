@@ -4393,3 +4393,48 @@ html[data-theme="light"] .executive-hero-highlight {
   .file-manager-item { flex-direction: column; align-items: stretch; }
   .file-manager-item > .delete-btn, .file-manager-item > .ghost-btn { width: 100%; text-align: center; }
 }
+
+
+/* Identificação consistente dos estágios da demanda, no painel de todos os usuários. */
+.demand-table .status-select {
+  font-weight: 750;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  padding: 0 28px 0 10px;
+}
+.demand-table .status-select.status-new {
+  background-color: rgba(148, 163, 184, .13);
+  color: var(--text);
+  border-color: rgba(148, 163, 184, .3);
+}
+.demand-table .status-select.status-contact {
+  background-color: rgba(249, 115, 22, .16);
+  color: #fb923c;
+  border-color: rgba(249, 115, 22, .42);
+}
+.demand-table .status-select.status-interested {
+  background-color: rgba(59, 130, 246, .16);
+  color: #60a5fa;
+  border-color: rgba(59, 130, 246, .42);
+}
+.demand-table .status-select.status-converted {
+  background-color: rgba(34, 197, 94, .15);
+  color: #4ade80;
+  border-color: rgba(34, 197, 94, .42);
+}
+.demand-table .status-select.status-no-return {
+  background-color: rgba(239, 68, 68, .15);
+  color: #f87171;
+  border-color: rgba(239, 68, 68, .42);
+}
+.demand-table tr.lead-status-row td:first-child {
+  border-left: 3px solid transparent;
+}
+.demand-table tr.lead-status-row.status-contact td:first-child { border-left-color: #f97316; }
+.demand-table tr.lead-status-row.status-interested td:first-child { border-left-color: #3b82f6; }
+.demand-table tr.lead-status-row.status-converted td:first-child { border-left-color: #22c55e; }
+.demand-table tr.lead-status-row.status-no-return td:first-child { border-left-color: #ef4444; }
+html[data-theme="light"] .demand-table .status-select.status-contact { color: #9a3412; }
+html[data-theme="light"] .demand-table .status-select.status-interested { color: #1d4ed8; }
+html[data-theme="light"] .demand-table .status-select.status-converted { color: #166534; }
+html[data-theme="light"] .demand-table .status-select.status-no-return { color: #b91c1c; }
