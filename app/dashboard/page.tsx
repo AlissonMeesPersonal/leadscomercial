@@ -1233,13 +1233,13 @@ export default function DashboardPage() {
     });
 
     // Prioriza demandas ainda não trabalhadas independentemente da ordenação
-    // escolhida. "Em contato" fica no final para não esconder novos leads.
+    // escolhida. "Novo" sempre fica no topo; as demais etapas seguem o fluxo comercial.
     const statusPriority: Record<Status, number> = {
       "Novo": 0,
-      "Interessado": 1,
-      "Sem retorno": 2,
-      "Convertido": 3,
-      "Em contato": 4
+      "Em contato": 1,
+      "Interessado": 2,
+      "Sem retorno": 3,
+      "Convertido": 4
     };
 
     return result.sort((a, b) => {
