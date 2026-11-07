@@ -983,7 +983,7 @@ export default function DashboardPage() {
     for (const lead of leads) {
       if (lead.tipo !== "opportunity" && lead.tipo !== "inactive") continue;
       const filename = lead.origem.split(" • ")[0].trim();
-      if (!/\\.(xlsx?|xlsm|xlsb|ods|csv|tsv|txt|pdf|docx?|json)$/i.test(filename)) continue;
+      if (!/\.(xlsx?|xlsm|xlsb|ods|csv|tsv|txt|pdf|docx?|json)$/i.test(filename)) continue;
       if (sessionInfo.role !== "admin" && sessionInfo.unitId && lead.unitId !== sessionInfo.unitId) continue;
       if (sessionInfo.role !== "admin" && lead.ownerUserId !== currentOwnerId) continue;
       if (!lead.ownerUserId) continue;
