@@ -1232,7 +1232,20 @@ export default function DashboardPage() {
       return matches && statusOk && ownerOk;
     });
 
+    // Prioriza demandas ainda não trabalhadas independentemente da ordenação
+    // escolhida. "Em contato" fica no final para não esconder novos leads.
+    const statusPriority: Record<Status, number> = {
+      "Novo": 0,
+      "Interessado": 1,
+      "Sem retorno": 2,
+      "Convertido": 3,
+      "Em contato": 4
+    };
+
     return result.sort((a, b) => {
+      const priorityDifference = statusPriority[a.status] - statusPriority[b.status];
+      if (priorityDifference !== 0) return priorityDifference;
+
       if (sortOrder === "az") {
         return (a.nome || "").localeCompare(b.nome || "", "pt-BR", {
           sensitivity: "base"
@@ -2449,7 +2462,7 @@ export default function DashboardPage() {
             }
             aria-label="Ordenar clientes"
           >
-            <option value="recent">Mais recentes</option>
+            <option value="recent">Novos primeiro · mais recentes</option>
             <option value="az">Nome A–Z</option>
             <option value="za">Nome Z–A</option>
           </select>
