@@ -109,6 +109,17 @@ type OwnerUser = {
 
 const statusList: Status[] = ["Novo", "Em contato", "Interessado", "Sem retorno", "Convertido"];
 
+function statusClass(status: Status) {
+  switch (status) {
+    case "Em contato": return "contact";
+    case "Interessado": return "interested";
+    case "Convertido": return "converted";
+    case "Sem retorno": return "no-return";
+    default: return "new";
+  }
+}
+
+
 const SUPABASE_URL = "https://efahamylmoueniflnvzl.supabase.co";
 const SUPABASE_KEY = "sb_publishable_TD903F8atFHoM64JbiEEFA_qhnm_PhI";
 const COMMERCIAL_ACCESS_KEY = "commercial-supabase-access";
@@ -2470,7 +2481,7 @@ export default function DashboardPage() {
                 );
 
                 return (
-                  <tr key={lead.id}>
+                  <tr key={lead.id} className={`lead-status-row status-${statusClass(lead.status)}`}>
                     <td>
                       <strong>{lead.nome || "Sem nome"}</strong>
                       <small>
@@ -2530,7 +2541,7 @@ export default function DashboardPage() {
                     )}
                     <td>
                       <select
-                        className="status-select"
+                        className={`status-select status-${statusClass(lead.status)}`}
                         value={lead.status}
                         onChange={(event) =>
                           void updateStatus(
