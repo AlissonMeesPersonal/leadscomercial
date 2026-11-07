@@ -4522,3 +4522,26 @@ html[data-theme="light"] .demand-table tr.lead-status-row.status-no-return { --l
   flex-shrink: 0;
 }
 .lead-status-count strong { color: var(--text); font-variant-numeric: tabular-nums; }
+
+
+/* Contraste do menu nativo de status no Chrome/Windows.
+   As cores de cada etapa ficam no seletor fechado; o menu aberto
+   usa texto escuro sobre fundo claro, evitando opções quase invisíveis. */
+.demand-table .status-select {
+  color-scheme: light;
+  font-size: 13px;
+  line-height: 1.35;
+}
+.demand-table .status-select option {
+  color: #172033 !important;
+  background-color: #ffffff !important;
+  font-weight: 600;
+}
+.demand-table .status-select option:checked {
+  color: #ffffff !important;
+  background-color: #2563eb !important;
+}
+.demand-table .status-select:focus-visible {
+  outline: 2px solid #60a5fa;
+  outline-offset: 2px;
+}
