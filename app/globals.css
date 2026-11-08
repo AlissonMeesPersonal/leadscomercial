@@ -4598,3 +4598,33 @@ html[data-theme="light"] .activity-filters > input { color-scheme: light; }
   .demand-tabs { grid-template-columns: repeat(2,minmax(0,1fr)); }
   .activity-filters { grid-template-columns: 1fr; }
 }
+
+
+/* Estados exclusivos para a carteira de inadimplentes. */
+.demand-table .status-select.status-promise {
+  color: #d8b4fe;
+  background: rgba(168,85,247,.15);
+  border-color: rgba(168,85,247,.45);
+}
+.demand-table tr.lead-status-row.status-promise {
+  --lead-accent: #a855f7;
+  --lead-tint: rgba(168,85,247,.12);
+}
+.lead-status-count.status-promise { --lead-accent: #a855f7; }
+html[data-theme="light"] .demand-table .status-select.status-promise {
+  color: #7e22ce;
+}
+html[data-theme="light"] .demand-table tr.lead-status-row.status-promise {
+  --lead-tint: rgba(168,85,247,.09);
+}
+.collection-status-cell { display:flex; flex-wrap:wrap; align-items:center; gap:8px; min-width:185px; }
+.collection-promise-date { display:flex; align-items:center; flex-wrap:wrap; gap:6px; }
+.collection-promise-date span { color:var(--muted); font-size:11px; }
+.collection-promise-date input {
+  min-height:36px; max-width:156px; padding:5px 8px;
+  color:var(--text); background:var(--bg-soft);
+  border:1px solid var(--line); border-radius:8px;
+  font:inherit; font-size:12px; color-scheme:dark;
+}
+html[data-theme="light"] .collection-promise-date input { color-scheme:light; }
+.collection-promise-date input:disabled { opacity:.6; cursor:wait; }
