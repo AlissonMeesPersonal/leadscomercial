@@ -1339,7 +1339,7 @@ export default function DashboardPage() {
       return;
     }
     setPendingPromiseId(null);
-    if (item && promises[item.id]) await savePromiseDate(item.id, null);
+    if (item && promises[item.id] && !(await savePromiseDate(item.id, null))) return;
     await updateStatus(lead.id, stage);
   }
 
@@ -1361,8 +1361,10 @@ export default function DashboardPage() {
       });
       setPendingPromiseId(null);
       setNotice(date ? "Data combinada para pagamento salva." : "Promessa de pagamento removida.");
+      return true;
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Não foi possível registrar a data.");
+      return false;
     } finally {
       setSavingPromiseId(null);
     }
@@ -2891,7 +2893,7 @@ export default function DashboardPage() {
                                 aria-label={`Data prometida para pagamento de ${lead.nome}`}
                                 value={promises[delinquentItem.id] || ""}
                                 disabled={savingPromiseId === delinquentItem.id || delinquentItem.payment_status === "paid"}
-                                onChange={(event) => { if (event.target.value) void savePromiseDate(delinquentItem.id, event.target.value); }}
+                                onChange={(event) => { if (event.target.value) void (async () => { if (await savePromiseDate(delinquentItem.id, event.target.value)) await updateStatus(lead.id, "Em contato"); })(); }}
                               />
                             </label>
                           )}
