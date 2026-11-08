@@ -812,6 +812,8 @@ export default function DashboardPage() {
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("Todos");
   const [promises, setPromises] = useState<Record<string, string>>({});
+  const [promiseDrafts, setPromiseDrafts] = useState<Record<string, string>>({});
+  const [promiseLoadError, setPromiseLoadError] = useState("");
   const [pendingPromiseId, setPendingPromiseId] = useState<string | null>(null);
   const [savingPromiseId, setSavingPromiseId] = useState<string | null>(null);
   const [dateFilter, setDateFilter] = useState("");
@@ -1217,10 +1219,18 @@ export default function DashboardPage() {
     async function loadPromises() {
       try {
         const response = await fetch("/api/delinquent-promise", { cache: "no-store" });
-        if (!response.ok) return;
+        if (!response.ok) {
+          if (!canceled) setPromiseLoadError("As datas não estão disponíveis. Verifique a configuração no Supabase.");
+          return;
+        }
         const rows = await response.json() as {id:string;promised_payment_date:string|null}[];
-        if (!canceled) setPromises(Object.fromEntries(rows.filter(row => row.promised_payment_date).map(row => [row.id, row.promised_payment_date as string])));
-      } catch { /* A funcionalidade depende da migração SQL; a carteira continua visível. */ }
+        if (!canceled) {
+          setPromises(Object.fromEntries(rows.filter(row => row.promised_payment_date).map(row => [row.id, row.promised_payment_date as string])));
+          setPromiseLoadError("");
+        }
+      } catch {
+        if (!canceled) setPromiseLoadError("Não foi possível carregar as datas de pagamento.");
+      }
     }
     void loadPromises();
     return () => { canceled = true; };
@@ -1336,6 +1346,7 @@ export default function DashboardPage() {
     if (stage === "Pagará") {
       if (!item) return setNotice("Não existe uma cobrança vinculada para escolher a data.");
       setPendingPromiseId(item.id);
+      setPromiseDrafts(current => ({ ...current, [item.id]: promises[item.id] || "" }));
       return;
     }
     setPendingPromiseId(null);
@@ -1353,17 +1364,27 @@ export default function DashboardPage() {
       });
       const data = await response.json() as { promised_payment_date?: string | null; error?: string };
       if (!response.ok) throw new Error(data.error || "Falha ao registrar data do pagamento.");
+      if (data.promised_payment_date !== date) {
+        throw new Error("O banco não confirmou a data escolhida. Tente novamente.");
+      }
       setPromises(current => {
         const next = { ...current };
         if (data.promised_payment_date) next[itemId] = data.promised_payment_date;
         else delete next[itemId];
         return next;
       });
+      setPromiseDrafts(current => {
+        const next = { ...current };
+        delete next[itemId];
+        return next;
+      });
       setPendingPromiseId(null);
-      setNotice(date ? "Data combinada para pagamento salva." : "Promessa de pagamento removida.");
+      setNotice(date ? `Data combinada para pagamento salva: ${date.split("-").reverse().join("/")}.` : "Promessa de pagamento removida.");
       return true;
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Não foi possível registrar a data.");
+      // Mantém o campo e a data escolhida para permitir nova tentativa.
+      if (date) setPendingPromiseId(itemId);
       return false;
     } finally {
       setSavingPromiseId(null);
@@ -2752,6 +2773,7 @@ export default function DashboardPage() {
           </select>
         </div>
 
+        {activeTab === "delinquent" && promiseLoadError && <div className="notice" role="alert">{promiseLoadError}</div>}
         <div className="lead-status-overview" aria-label="Situação dos contatos exibidos">
           <span className="lead-status-overview-title">
             {filtered.length.toLocaleString("pt-BR")} contato(s) exibido(s) com os filtros atuais
@@ -2891,9 +2913,13 @@ export default function DashboardPage() {
                               <input
                                 type="date"
                                 aria-label={`Data prometida para pagamento de ${lead.nome}`}
-                                value={promises[delinquentItem.id] || ""}
+                                value={promiseDrafts[delinquentItem.id] ?? promises[delinquentItem.id] ?? ""}
                                 disabled={savingPromiseId === delinquentItem.id || delinquentItem.payment_status === "paid"}
-                                onChange={(event) => { if (event.target.value) void (async () => { if (await savePromiseDate(delinquentItem.id, event.target.value)) await updateStatus(lead.id, "Em contato"); })(); }}
+                                onChange={(event) => {
+                                  const chosenDate = event.target.value;
+                                  setPromiseDrafts(current => ({ ...current, [delinquentItem.id]: chosenDate }));
+                                  if (chosenDate) void savePromiseDate(delinquentItem.id, chosenDate);
+                                }}
                               />
                             </label>
                           )}
