@@ -2044,18 +2044,23 @@ export default function DashboardPage() {
     // Cada clique gera uma tentativa idempotente de registro no banco,
     // sem afirmar que houve envio de mensagem.
     const eventId = crypto.randomUUID();
-    try {
-      const logResponse = await fetch("/api/contact-events", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ leadId: lead.id, eventId })
-      });
-      if (!logResponse.ok) {
-        console.warn("[Leads Comercial] Início de atendimento sem registro persistente.");
+    // O registro não deve atrasar a abertura do Scale. Em caso de erro,
+    // o contato continua sendo aberto, mas não é contado como registrado.
+    void (async () => {
+      try {
+        const logResponse = await fetch("/api/contact-events", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ leadId: lead.id, eventId }),
+          signal: AbortSignal.timeout(8000)
+        });
+        if (!logResponse.ok) {
+          console.warn("[Leads Comercial] Atendimento aberto sem registro de auditoria.");
+        }
+      } catch {
+        console.warn("[Leads Comercial] Auditoria de início de atendimento indisponível.");
       }
-    } catch {
-      console.warn("[Leads Comercial] Registro de início de atendimento indisponível.");
-    }
+    })();
 
     void updateStatus(lead.id, "Em contato");
     setNotice(`Procurando uma aba do Scale para ${lead.nome}…`);
