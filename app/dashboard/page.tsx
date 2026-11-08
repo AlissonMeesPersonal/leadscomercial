@@ -2761,11 +2761,11 @@ export default function DashboardPage() {
               <span
                 key={status}
                 className={`lead-status-count status-${status === "Pagará" ? "promise" : status === "Pago" ? "converted" : statusClass(status as Status)}`}
-                title={`${filteredStatusCounts[status]} contato(s) em ${status}`}
+                title={`${filteredStatusCounts[status] ?? 0} contato(s) em ${status}`}
               >
                 <span className="lead-status-dot" aria-hidden="true" />
                 {activeTab === "inactive" && status === "Convertido" ? "Reativado" : status}
-                <strong>{filteredStatusCounts[status].toLocaleString("pt-BR")}</strong>
+                <strong>{(filteredStatusCounts[status] ?? 0).toLocaleString("pt-BR")}</strong>
               </span>
             ))}
           </div>
