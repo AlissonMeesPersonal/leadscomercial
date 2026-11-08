@@ -43,6 +43,17 @@ type SavedImportAudit = {
   not_inserted_rows: number;
 };
 
+type ContactEvent = {
+  id: string;
+  lead_id: string | null;
+  actor_user_id: string;
+  lead_owner_user_id: string | null;
+  unit_id: string | null;
+  demand_type: DemandType;
+  event_type: "scale_started";
+  occurred_at: string;
+};
+
 type ImportAudit = {
   filename: string;
   read: number;
@@ -808,6 +819,12 @@ export default function DashboardPage() {
   const [importAudit, setImportAudit] = useState<ImportAudit | null>(null);
   const [savedImportAudits, setSavedImportAudits] = useState<SavedImportAudit[]>([]);
   const [showFilesTab, setShowFilesTab] = useState(false);
+  const [showActivityTab, setShowActivityTab] = useState(false);
+  const [contactEvents, setContactEvents] = useState<ContactEvent[]>([]);
+  const [contactEventsError, setContactEventsError] = useState("");
+  const [activityOwnerFilter, setActivityOwnerFilter] = useState("Todos");
+  const [activityDemandFilter, setActivityDemandFilter] = useState("Todos");
+  const [activityDateFilter, setActivityDateFilter] = useState("");
   const [fileSearch, setFileSearch] = useState("");
   const [processing, setProcessing] = useState(false);
   const [sessionInfo, setSessionInfo] = useState<SessionInfo | null>(null);
@@ -981,6 +998,30 @@ export default function DashboardPage() {
     void loadAudits();
     return () => { canceled = true; };
   }, [loaded, sessionInfo]);
+
+  useEffect(() => {
+    if (!showActivityTab || !sessionInfo) return;
+    let stopped = false;
+    async function loadEvents() {
+      try {
+        const response = await fetch("/api/contact-events", { cache: "no-store" });
+        if (!response.ok) {
+          if (!stopped) setContactEventsError("O histórico precisa ser ativado no Supabase para exibir os atendimentos.");
+          return;
+        }
+        const records = await response.json() as ContactEvent[];
+        if (!stopped) {
+          setContactEvents(records);
+          setContactEventsError("");
+        }
+      } catch {
+        if (!stopped) setContactEventsError("Não foi possível carregar os atendimentos.");
+      }
+    }
+    void loadEvents();
+    const refresh = window.setInterval(() => { void loadEvents(); }, 30000);
+    return () => { stopped = true; window.clearInterval(refresh); };
+  }, [showActivityTab, sessionInfo]);
 
   const ownerById = useMemo(
     () => new Map(owners.map((owner) => [owner.id, owner] as const)),
@@ -2000,6 +2041,22 @@ export default function DashboardPage() {
       );
     } catch {}
 
+    // Cada clique gera uma tentativa idempotente de registro no banco,
+    // sem afirmar que houve envio de mensagem.
+    const eventId = crypto.randomUUID();
+    try {
+      const logResponse = await fetch("/api/contact-events", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ leadId: lead.id, eventId })
+      });
+      if (!logResponse.ok) {
+        console.warn("[Leads Comercial] Início de atendimento sem registro persistente.");
+      }
+    } catch {
+      console.warn("[Leads Comercial] Registro de início de atendimento indisponível.");
+    }
+
     void updateStatus(lead.id, "Em contato");
     setNotice(`Procurando uma aba do Scale para ${lead.nome}…`);
 
@@ -2117,8 +2174,15 @@ export default function DashboardPage() {
     (lead) => lead.status === "Convertido"
   ).length;
 
+  const visibleContactEvents = useMemo(() => contactEvents.filter((event) =>
+    (activityOwnerFilter === "Todos" || event.actor_user_id === activityOwnerFilter) &&
+    (activityDemandFilter === "Todos" || event.demand_type === activityDemandFilter) &&
+    (!activityDateFilter || new Date(event.occurred_at).toLocaleDateString("en-CA", {timeZone:"America/Sao_Paulo"}) === activityDateFilter)
+  ), [contactEvents, activityOwnerFilter, activityDemandFilter, activityDateFilter]);
+
   function changeTab(tab: DemandType) {
     setShowFilesTab(false);
+    setShowActivityTab(false);
     setActiveTab(tab);
     setOwnerFilter("Todos");
     setStatusFilter("Todos");
@@ -2172,7 +2236,7 @@ export default function DashboardPage() {
             hidden
           />
 
-          {!showFilesTab && <button
+          {!showFilesTab && !showActivityTab && <button
             className={
               activeTab === "delinquent"
                 ? "delinquent-import-btn"
@@ -2201,7 +2265,7 @@ export default function DashboardPage() {
       <section className="demand-tabs" aria-label="Tipo de demanda">
         <button
           type="button"
-          className={!showFilesTab && activeTab === "opportunity" ? "demand-tab active opportunity" : "demand-tab opportunity"}
+          className={!showFilesTab && !showActivityTab && activeTab === "opportunity" ? "demand-tab active opportunity" : "demand-tab opportunity"}
           onClick={() => changeTab("opportunity")}
         >
           <span>Oportunidades</span>
@@ -2210,7 +2274,7 @@ export default function DashboardPage() {
 
         <button
           type="button"
-          className={!showFilesTab && activeTab === "delinquent" ? "demand-tab active delinquent" : "demand-tab delinquent"}
+          className={!showFilesTab && !showActivityTab && activeTab === "delinquent" ? "demand-tab active delinquent" : "demand-tab delinquent"}
           onClick={() => changeTab("delinquent")}
         >
           <span>Inadimplentes</span>
@@ -2219,7 +2283,7 @@ export default function DashboardPage() {
 
         <button
           type="button"
-          className={!showFilesTab && activeTab === "inactive" ? "demand-tab active inactive" : "demand-tab inactive"}
+          className={!showFilesTab && !showActivityTab && activeTab === "inactive" ? "demand-tab active inactive" : "demand-tab inactive"}
           onClick={() => changeTab("inactive")}
         >
           <span>Inativos</span>
@@ -2229,15 +2293,69 @@ export default function DashboardPage() {
           <button
             type="button"
             className={showFilesTab ? "demand-tab files active" : "demand-tab files"}
-            onClick={() => { setShowFilesTab(true); setNotice(""); }}
+            onClick={() => { setShowFilesTab(true); setShowActivityTab(false); setNotice(""); }}
           >
             <span>Gerenciar arquivos</span>
             <strong>{importedFolders.length + visibleDelinquentImports.length}</strong>
           </button>
         )}
+        <button
+          type="button"
+          className={showActivityTab ? "demand-tab files active" : "demand-tab files"}
+          onClick={() => { setShowActivityTab(true); setShowFilesTab(false); setNotice(""); }}
+        >
+          <span>Atendimentos</span>
+          <strong>↗</strong>
+        </button>
       </section>
 
-      {showFilesTab ? (
+      {showActivityTab ? (
+        <section className="file-manager-page" aria-label="Histórico de atendimentos">
+          <div className="file-manager-title">
+            <div>
+              <p className="eyebrow">PRODUTIVIDADE COMERCIAL</p>
+              <h2>Atendimentos iniciados no Scale</h2>
+              <p>Conta os cliques em Iniciar no Scale. Não representa mensagens efetivamente enviadas.</p>
+            </div>
+            <span className="file-manager-total">{visibleContactEvents.length.toLocaleString("pt-BR")} início(s)</span>
+          </div>
+          <div className="activity-filters">
+            {sessionInfo?.role === "admin" && (
+              <select value={activityOwnerFilter} onChange={(e) => setActivityOwnerFilter(e.target.value)} aria-label="Filtrar colaborador">
+                <option value="Todos">Todos os colaboradores</option>
+                {owners.map((owner) => <option key={owner.id} value={owner.id}>{owner.display_name}</option>)}
+              </select>
+            )}
+            <select value={activityDemandFilter} onChange={(e) => setActivityDemandFilter(e.target.value)} aria-label="Filtrar carteira">
+              <option value="Todos">Todas as carteiras</option>
+              <option value="opportunity">Oportunidades</option>
+              <option value="delinquent">Inadimplentes</option>
+              <option value="inactive">Inativos</option>
+            </select>
+            <input type="date" aria-label="Filtrar data" value={activityDateFilter} onChange={(e) => setActivityDateFilter(e.target.value)} />
+          </div>
+          {contactEventsError && <p className="notice" role="alert">{contactEventsError}</p>}
+          <div className="activity-stats">
+            <article><small>Atendimentos iniciados</small><strong>{visibleContactEvents.length.toLocaleString("pt-BR")}</strong></article>
+            <article><small>Oportunidades</small><strong>{visibleContactEvents.filter((event) => event.demand_type === "opportunity").length.toLocaleString("pt-BR")}</strong></article>
+            <article><small>Inadimplentes</small><strong>{visibleContactEvents.filter((event) => event.demand_type === "delinquent").length.toLocaleString("pt-BR")}</strong></article>
+            <article><small>Inativos</small><strong>{visibleContactEvents.filter((event) => event.demand_type === "inactive").length.toLocaleString("pt-BR")}</strong></article>
+          </div>
+          <div className="file-manager-list">
+            {visibleContactEvents.map((event) => (
+              <article className="file-manager-item" key={event.id}>
+                <div className="file-manager-info">
+                  <strong>{ownerById.get(event.actor_user_id)?.display_name || "Colaborador"}</strong>
+                  <span>{event.demand_type === "opportunity" ? "Oportunidades" : event.demand_type === "inactive" ? "Inativos" : "Inadimplentes"} · Atendimento iniciado</span>
+                  <small>{new Date(event.occurred_at).toLocaleString("pt-BR")} · {event.unit_id ? unitById.get(event.unit_id)?.name || "Unidade" : "Sem unidade"}</small>
+                </div>
+                <span className="file-manager-total">Iniciado</span>
+              </article>
+            ))}
+            {!visibleContactEvents.length && !contactEventsError && <p className="file-manager-empty">Nenhum atendimento iniciado nos filtros selecionados.</p>}
+          </div>
+        </section>
+      ) : showFilesTab ? (
         <section className="file-manager-page" aria-label="Gerenciamento de arquivos importados">
           <div className="file-manager-title">
             <div>
