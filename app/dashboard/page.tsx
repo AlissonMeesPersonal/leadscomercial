@@ -133,6 +133,8 @@ type OwnerUser = {
 };
 
 const statusList: Status[] = ["Novo", "Em contato", "Interessado", "Sem retorno", "Convertido"];
+const delinquentStatusList = ["Novo", "Em contato", "Pagará", "Pago"] as const;
+type DelinquentStage = typeof delinquentStatusList[number];
 
 function statusClass(status: Status) {
   switch (status) {
@@ -809,6 +811,9 @@ export default function DashboardPage() {
   const [loaded, setLoaded] = useState(false);
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("Todos");
+  const [promises, setPromises] = useState<Record<string, string>>({});
+  const [pendingPromiseId, setPendingPromiseId] = useState<string | null>(null);
+  const [savingPromiseId, setSavingPromiseId] = useState<string | null>(null);
   const [dateFilter, setDateFilter] = useState("");
   const [unitFilter, setUnitFilter] = useState("Todas");
   const [ownerFilter, setOwnerFilter] = useState("Todos");
@@ -1206,6 +1211,21 @@ export default function DashboardPage() {
     return owners.filter((owner) => used.has(owner.id));
   }, [dateScopedLeads, owners]);
 
+  useEffect(() => {
+    if (!loaded || !sessionInfo || activeTab !== "delinquent") return;
+    let canceled = false;
+    async function loadPromises() {
+      try {
+        const response = await fetch("/api/delinquent-promise", { cache: "no-store" });
+        if (!response.ok) return;
+        const rows = await response.json() as {id:string;promised_payment_date:string|null}[];
+        if (!canceled) setPromises(Object.fromEntries(rows.filter(row => row.promised_payment_date).map(row => [row.id, row.promised_payment_date as string])));
+      } catch { /* A funcionalidade depende da migração SQL; a carteira continua visível. */ }
+    }
+    void loadPromises();
+    return () => { canceled = true; };
+  }, [loaded, sessionInfo, activeTab, delinquentItems]);
+
   const delinquentItemByLead = useMemo(() => {
     const map = new Map<string, DelinquentItem>();
     const allowedLeadIds = new Set(unitScopedLeads.map((lead) => lead.id));
@@ -1293,6 +1313,61 @@ export default function DashboardPage() {
     dateFilter
   ]);
 
+  function delinquentStage(lead: Lead): DelinquentStage {
+    const item = delinquentItemByLead.get(lead.id);
+    if (item?.payment_status === "paid") return "Pago";
+    if (item && (promises[item.id] || pendingPromiseId === item.id)) return "Pagará";
+    return lead.status === "Novo" ? "Novo" : "Em contato";
+  }
+
+  function visualStatus(lead: Lead) {
+    if (lead.tipo !== "delinquent") return statusClass(lead.status);
+    const stage = delinquentStage(lead);
+    return stage === "Pagará" ? "promise" : stage === "Pago" ? "converted"
+      : stage === "Em contato" ? "contact" : "new";
+  }
+
+  async function changeDelinquentStage(lead: Lead, item: DelinquentItem | null, stage: DelinquentStage) {
+    if (stage === "Pago") {
+      if (!item) return setNotice("Não existe uma cobrança vinculada para registrar o pagamento.");
+      if (item.payment_status !== "paid") await registerDelinquentPayment(lead, item);
+      return;
+    }
+    if (stage === "Pagará") {
+      if (!item) return setNotice("Não existe uma cobrança vinculada para escolher a data.");
+      setPendingPromiseId(item.id);
+      return;
+    }
+    setPendingPromiseId(null);
+    if (item && promises[item.id]) await savePromiseDate(item.id, null);
+    await updateStatus(lead.id, stage);
+  }
+
+  async function savePromiseDate(itemId: string, date: string | null) {
+    setSavingPromiseId(itemId);
+    try {
+      const response = await fetch("/api/delinquent-promise", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ itemId, date })
+      });
+      const data = await response.json() as { promised_payment_date?: string | null; error?: string };
+      if (!response.ok) throw new Error(data.error || "Falha ao registrar data do pagamento.");
+      setPromises(current => {
+        const next = { ...current };
+        if (data.promised_payment_date) next[itemId] = data.promised_payment_date;
+        else delete next[itemId];
+        return next;
+      });
+      setPendingPromiseId(null);
+      setNotice(date ? "Data combinada para pagamento salva." : "Promessa de pagamento removida.");
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Não foi possível registrar a data.");
+    } finally {
+      setSavingPromiseId(null);
+    }
+  }
+
   const filtered = useMemo(() => {
     const q = query.toLowerCase();
 
@@ -1314,7 +1389,7 @@ export default function DashboardPage() {
         .toLowerCase()
         .includes(q);
 
-      const statusOk = statusFilter === "Todos" || lead.status === statusFilter;
+      const statusOk = statusFilter === "Todos" || (activeTab === "delinquent" ? delinquentStage(lead) === statusFilter : lead.status === statusFilter);
       const ownerOk = ownerFilter === "Todos" || lead.ownerUserId === ownerFilter;
 
       return matches && statusOk && ownerOk;
@@ -1331,7 +1406,10 @@ export default function DashboardPage() {
     };
 
     return result.sort((a, b) => {
-      const priorityDifference = statusPriority[a.status] - statusPriority[b.status];
+      const delinquentPriority: Record<DelinquentStage, number> = { "Novo": 0, "Em contato": 1, "Pagará": 2, "Pago": 3 };
+      const priorityDifference = activeTab === "delinquent"
+        ? delinquentPriority[delinquentStage(a)] - delinquentPriority[delinquentStage(b)]
+        : statusPriority[a.status] - statusPriority[b.status];
       if (priorityDifference !== 0) return priorityDifference;
 
       if (sortOrder === "az") {
@@ -1348,21 +1426,16 @@ export default function DashboardPage() {
 
       return new Date(b.criadoEm).getTime() - new Date(a.criadoEm).getTime();
     });
-  }, [dateScopedLeads, query, statusFilter, ownerFilter, ownerById, sortOrder]);
+  }, [dateScopedLeads, query, statusFilter, ownerFilter, ownerById, sortOrder, activeTab, promises, pendingPromiseId, delinquentItemByLead]);
 
   const filteredStatusCounts = useMemo(() => {
-    const counts: Record<Status, number> = {
-      "Novo": 0,
-      "Em contato": 0,
-      "Interessado": 0,
-      "Sem retorno": 0,
-      "Convertido": 0
-    };
+    const counts: Record<string, number> = {};
     for (const lead of filtered) {
-      if (lead.status in counts) counts[lead.status] += 1;
+      const stage = activeTab === "delinquent" ? delinquentStage(lead) : lead.status;
+      counts[stage] = (counts[stage] || 0) + 1;
     }
     return counts;
-  }, [filtered]);
+  }, [filtered, activeTab, delinquentItemByLead, promises, pendingPromiseId]);
 
   async function reloadDelinquentTracking() {
     const [leadResponse, batchResponse, delinquentItemResponse] = await Promise.all([
@@ -2655,7 +2728,7 @@ export default function DashboardPage() {
             onChange={(event) => setStatusFilter(event.target.value)}
           >
             <option>Todos</option>
-            {statusList.map((status) => (
+            {(activeTab === "delinquent" ? delinquentStatusList : statusList).map((status) => (
               <option key={status} value={status}>
                 {activeTab === "inactive" && status === "Convertido"
                   ? "Reativado"
@@ -2682,10 +2755,10 @@ export default function DashboardPage() {
             {filtered.length.toLocaleString("pt-BR")} contato(s) exibido(s) com os filtros atuais
           </span>
           <div className="lead-status-overview-items">
-            {statusList.map((status) => (
+            {(activeTab === "delinquent" ? delinquentStatusList : statusList).map((status) => (
               <span
                 key={status}
-                className={`lead-status-count status-${statusClass(status)}`}
+                className={`lead-status-count status-${status === "Pagará" ? "promise" : status === "Pago" ? "converted" : statusClass(status as Status)}`}
                 title={`${filteredStatusCounts[status]} contato(s) em ${status}`}
               >
                 <span className="lead-status-dot" aria-hidden="true" />
@@ -2735,7 +2808,7 @@ export default function DashboardPage() {
                 );
 
                 return (
-                  <tr key={lead.id} className={`lead-status-row status-${statusClass(lead.status)}`}>
+                  <tr key={lead.id} className={`lead-status-row status-${visualStatus(lead)}`}>
                     <td>
                       <strong>{lead.nome || "Sem nome"}</strong>
                       <small>
@@ -2794,24 +2867,35 @@ export default function DashboardPage() {
                       </>
                     )}
                     <td>
-                      <select
-                        className={`status-select status-${statusClass(lead.status)}`}
-                        value={lead.status}
-                        onChange={(event) =>
-                          void updateStatus(
-                            lead.id,
-                            event.target.value as Status
-                          )
-                        }
-                      >
-                        {statusList.map((status) => (
-                          <option key={status} value={status}>
-                            {activeTab === "inactive" && status === "Convertido"
-                              ? "Reativado"
-                              : status}
-                          </option>
-                        ))}
-                      </select>
+                      <div className="collection-status-cell">
+                        <select
+                          className={`status-select status-${visualStatus(lead)}`}
+                          value={activeTab === "delinquent" ? delinquentStage(lead) : lead.status}
+                          onChange={(event) => {
+                            if (activeTab === "delinquent") void changeDelinquentStage(lead, delinquentItem, event.target.value as DelinquentStage);
+                            else void updateStatus(lead.id, event.target.value as Status);
+                          }}
+                        >
+                          {(activeTab === "delinquent" ? delinquentStatusList : statusList).map((status) => (
+                            <option key={status} value={status}>
+                              {activeTab === "inactive" && status === "Convertido" ? "Reativado" : status}
+                            </option>
+                          ))}
+                        </select>
+                        {activeTab === "delinquent" && delinquentItem &&
+                          (delinquentStage(lead) === "Pagará") && (
+                            <label className="collection-promise-date">
+                              <span>Data combinada</span>
+                              <input
+                                type="date"
+                                aria-label={`Data prometida para pagamento de ${lead.nome}`}
+                                value={promises[delinquentItem.id] || ""}
+                                disabled={savingPromiseId === delinquentItem.id || delinquentItem.payment_status === "paid"}
+                                onChange={(event) => { if (event.target.value) void savePromiseDate(delinquentItem.id, event.target.value); }}
+                              />
+                            </label>
+                          )}
+                      </div>
                     </td>
                     <td>
                       <div className="row-actions">
