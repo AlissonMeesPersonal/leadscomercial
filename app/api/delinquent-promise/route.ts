@@ -82,3 +82,45 @@ export async function PATCH(request: Request) {
   if (!rows.length) return NextResponse.json({ error: "Nenhuma cobrança atualizada." }, { status: 409 });
   return NextResponse.json(rows[0], { headers: { "Cache-Control": "no-store" } });
 }
+
+
+export async function GET() {
+  const session = await getSession((await cookies()).get("lead_session")?.value);
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!session || !key) return NextResponse.json({ error: "Indisponível." }, { status: 403 });
+  const headers = {
+    apikey: key, Authorization: `Bearer ${key}`,
+    "Content-Type": "application/json"
+  };
+  const userQuery = new URLSearchParams({
+    select: "id,username,role",
+    username: `eq.${session.username}`, active: "eq.true"
+  });
+  const response = await fetch(`${DB}/rest/v1/commercial_users?${userQuery}`, { headers, cache: "no-store" });
+  if (!response.ok) return NextResponse.json({ error: "Falha de autenticação." }, { status: 502 });
+  const users = await response.json() as { id: string; username: string; role: string }[];
+  const user = users.find(u => u.username.toLowerCase() === session.username.toLowerCase());
+  if (!user || (session.userId !== user.id &&
+    !(session.userId === "setor-comercial" && session.username === "comercial" && user.role === "commercial"))) {
+    return NextResponse.json({ error: "Acesso não autorizado." }, { status: 403 });
+  }
+  const admin = session.role === "admin" && user.role === "admin";
+  const rows: {id:string;promised_payment_date:string|null}[] = [];
+  for (let offset = 0; ; offset += 500) {
+    const params = new URLSearchParams({
+      select: "id,promised_payment_date,commercial_leads!inner(owner_user_id,unit_id,demand_type)",
+      limit: "500", offset: String(offset), order: "id.asc",
+      "commercial_leads.demand_type": "eq.delinquent"
+    });
+    if (!admin) params.set("commercial_leads.owner_user_id", `eq.${user.id}`);
+    if (!admin && session.unitId) params.set("commercial_leads.unit_id", `eq.${session.unitId}`);
+    const res = await fetch(`${DB}/rest/v1/commercial_delinquent_items?${params}`, {
+      headers, cache: "no-store"
+    });
+    if (!res.ok) return NextResponse.json({ error: "Configure a coluna de promessas no Supabase." }, { status: 503 });
+    const page = await res.json() as { id: string; promised_payment_date: string | null }[];
+    rows.push(...page.map(row => ({id:row.id,promised_payment_date:row.promised_payment_date})));
+    if (page.length < 500) break;
+  }
+  return NextResponse.json(rows, { headers: { "Cache-Control": "no-store" } });
+}
