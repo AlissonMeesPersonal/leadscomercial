@@ -1,6 +1,6 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { getSession } from "../../../../lib/auth";
+import { getSession } from "../../../lib/auth";
 
 const DB = "https://efahamylmoueniflnvzl.supabase.co";
 const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i;
