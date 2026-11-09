@@ -5,6 +5,19 @@ import { getSession } from "../../../../lib/auth";
 const DB = "https://efahamylmoueniflnvzl.supabase.co";
 const uuid = /^[0-9a-f]{8}-[0-9a-f-]{27,}$/i;
 
+
+export async function GET() {
+  const session = await getSession((await cookies()).get("lead_session")?.value);
+  if (!session || session.role !== "admin") return NextResponse.json({error:"Acesso negado."},{status:403});
+  const key=process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!key) return NextResponse.json({error:"Chave de serviço do Supabase indisponível."},{status:503});
+  const check=await fetch(`${DB}/rest/v1/commercial_password_activation?select=user_id&limit=0`,{
+    headers:{apikey:key,Authorization:`Bearer ${key}`},cache:"no-store"
+  });
+  if (!check.ok) return NextResponse.json({error:"Execute primeiro o SQL password-activation.sql no Supabase."},{status:503});
+  return NextResponse.json({ready:true},{headers:{"Cache-Control":"no-store"}});
+}
+
 export async function POST(request: Request) {
   const session = await getSession((await cookies()).get("lead_session")?.value);
   if (!session || session.role !== "admin") return NextResponse.json({error:"Somente o administrador pode cadastrar ativações."},{status:403});
