@@ -12,7 +12,7 @@ BEGIN
 
   IF role_type IS NULL THEN RAISE EXCEPTION 'Coluna commercial_users.role não encontrada'; END IF;
 
-  IF role_type IN ('text','character varying') THEN
+  IF role_type = 'text' OR role_type LIKE 'character varying%' THEN
     FOR c IN SELECT conname, pg_get_constraintdef(oid) AS def
       FROM pg_constraint
       WHERE conrelid = 'public.commercial_users'::regclass AND contype = 'c'
