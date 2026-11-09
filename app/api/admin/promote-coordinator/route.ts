@@ -20,13 +20,13 @@ export async function POST(request: Request) {
   const headers = {apikey:key,Authorization:`Bearer ${key}`,"Content-Type":"application/json"};
   const users = async (username:string) => {
     const params = new URLSearchParams({
-      select:"id,username,role,active",
+      select:"id,username,role,active,created_at",
       username:`eq.${username}`,
       active:"eq.true"
     });
     const response = await fetch(`${DB}/rest/v1/commercial_users?${params}`,{headers,cache:"no-store"});
     if (!response.ok) throw new Error("Não foi possível verificar as contas.");
-    return await response.json() as {id:string;username:string;role:string;active:boolean}[];
+    return await response.json() as {id:string;username:string;role:string;active:boolean;created_at:string}[];
   };
   try {
     const admins = await users(session.username);
@@ -34,8 +34,12 @@ export async function POST(request: Request) {
       return NextResponse.json({error:"Seu perfil de administrador não está ativo no banco."},{status:403});
     }
     const candidate = (await users(body.username))[0];
-    if (!candidate || candidate.role !== "commercial" || candidate.username.toLowerCase() === session.username.toLowerCase()) {
-      return NextResponse.json({error:"Conta comercial recém-criada não encontrada ou perfil incompatível."},{status:409});
+    if (!candidate || candidate.role !== "commercial" ||
+        candidate.username.toLowerCase() === session.username.toLowerCase() ||
+        !Number.isFinite(Date.parse(candidate.created_at)) ||
+        Date.now() - Date.parse(candidate.created_at) > 10 * 60 * 1000 ||
+        Date.now() < Date.parse(candidate.created_at)) {
+      return NextResponse.json({error:"A promoção só é permitida para uma conta comercial criada nos últimos 10 minutos."},{status:409});
     }
     const response = await fetch(
       `${DB}/rest/v1/commercial_users?id=eq.${encodeURIComponent(candidate.id)}&role=eq.commercial&select=id,role`,{
@@ -44,7 +48,7 @@ export async function POST(request: Request) {
     });
     if (!response.ok) {
       return NextResponse.json({
-        error:"A conta foi criada, mas o banco ainda não permite o perfil Coordenadora Comercial. Execute a migração SQL e conclua a ativação."
+        error:"Conta criada como Setor Comercial, mas o banco rejeitou o perfil Coordenadora. Execute supabase/coordinator-role.sql no SQL Editor do projeto Leads Comercial. A conta não recebeu permissão gerencial; não entregue a senha provisória."
       },{status:503});
     }
     const updated = await response.json() as {id:string;role:string}[];
