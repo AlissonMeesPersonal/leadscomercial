@@ -462,7 +462,6 @@ export default function AdminPage() {
               />
             </label>
 
-            {role === "coordinator" && <p className="admin-role-help">A coordenadora terá acesso ao painel gerencial, sem importação de planilhas, exclusão de contatos ou administração de usuários.</p>}
             <button className="primary-btn" type="submit">
               Criar unidade
             </button>
