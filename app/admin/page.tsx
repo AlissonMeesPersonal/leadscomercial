@@ -260,16 +260,30 @@ export default function AdminPage() {
           p_display_name: displayName,
           p_password: password,
           p_unit_id: unitId || null,
-          p_role: role
+          // Usa a rotina de criação já existente e ativa o perfil gerencial
+          // somente depois da validação do administrador no servidor.
+          p_role: role === "coordinator" ? "commercial" : role
         })
       });
+
+      if (role === "coordinator") {
+        const response = await fetch("/api/admin/promote-coordinator", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ username })
+        });
+        if (!response.ok) {
+          const data = await response.json().catch(() => ({})) as {error?:string};
+          throw new Error(data.error || "Conta criada, mas não foi possível ativar a permissão de coordenadora.");
+        }
+      }
 
       setDisplayName("");
       setUsername("");
       setPassword("");
       setRole("user");
       setUnitId("");
-      setNotice("Usuário criado com sucesso.");
+      setNotice(role === "coordinator" ? "Coordenadora Comercial criada! Ela poderá acessar somente o painel gerencial." : "Usuário criado com sucesso.");
       await loadData();
     } catch (err) {
       setNotice(
@@ -433,6 +447,7 @@ export default function AdminPage() {
               />
             </label>
 
+            {role === "coordinator" && <p className="admin-role-help">A coordenadora terá acesso ao painel gerencial, sem importação de planilhas, exclusão de contatos ou administração de usuários.</p>}
             <button className="primary-btn" type="submit">
               Criar unidade
             </button>
