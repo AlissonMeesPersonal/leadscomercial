@@ -569,13 +569,20 @@ export default function AdminPage() {
           {temporaryCredential && (
             <div className="temporary-credentials" role="status">
               <strong>Conta criada — acesso provisório</strong>
-              <p>Usuário: <code>{temporaryCredential.username}</code></p>
-              <p>Senha provisória: <code>{temporaryCredential.password}</code></p>
+              <div className="temporary-credentials-copy">
+                <p>Leads: https://leadscomercial.vercel.app/login</p>
+                <p>Usuário: {temporaryCredential.username}</p>
+                <p>Senha provisória: {temporaryCredential.password}</p>
+              </div>
               <button type="button" className="ghost-btn" onClick={() => {
-                void navigator.clipboard.writeText(
-                  `Usuário: ${temporaryCredential.username}\nSenha provisória: ${temporaryCredential.password}`
-                );
-              }}>Copiar acesso</button>
+                const accessMessage =
+                  `Leads: https://leadscomercial.vercel.app/login\n` +
+                  `Usuário: ${temporaryCredential.username}\n` +
+                  `Senha provisória: ${temporaryCredential.password}`;
+                void navigator.clipboard.writeText(accessMessage)
+                  .then(() => setNotice("Dados de acesso copiados."))
+                  .catch(() => setNotice("Não foi possível copiar automaticamente. Selecione o texto exibido."));
+              }}>Copiar dados de acesso</button>
               <small>Compartilhe por canal seguro. Esta senha aparece apenas nesta criação e será obrigatoriamente trocada.</small>
             </div>
           )}
