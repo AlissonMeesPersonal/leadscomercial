@@ -4698,3 +4698,36 @@ html[data-theme="light"] .coordinator-filters input { color-scheme: light; }
 .temporary-credentials p { margin: 6px 0; font-size: 13px; }
 .temporary-credentials code { font-family: ui-monospace, monospace; user-select: all; }
 .temporary-credentials small { display: block; margin-top: 10px; color: var(--muted); line-height: 1.5; }
+
+
+/* Visible password controls on the first-login registration screen. */
+.activation-password-field {
+  display: flex;
+  align-items: center;
+  position: relative;
+  width: 100%;
+}
+.activation-password-field input {
+  width: 100%;
+  min-width: 0;
+  padding-right: 78px;
+}
+.activation-eye-button {
+  position: absolute;
+  right: 7px;
+  top: 50%;
+  transform: translateY(-50%);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg-soft);
+  color: var(--text);
+  padding: 7px 10px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+}
+.activation-eye-button:hover, .activation-eye-button:focus-visible {
+  border-color: #f97316;
+  outline-offset: 2px;
+}
