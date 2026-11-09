@@ -362,6 +362,45 @@ export default function AdminPage() {
   }
 
 
+  async function reissueCoordinatorAccess(user: CommercialUser) {
+    if (!user.active || user.role !== "coordinator") return;
+    if (!window.confirm(
+      `Gerar uma NOVA senha provisória para ${user.display_name} (@${user.username})? A senha anterior deixará de funcionar e ela deverá definir uma nova.`
+    )) return;
+
+    setNotice("");
+    setTemporaryCredential(null);
+    try {
+      const setupCheck = await fetch("/api/admin/password-activation", {cache:"no-store"});
+      if (!setupCheck.ok) throw new Error("Configure a tabela de ativação de senhas no Supabase.");
+
+      const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
+      const bytes = new Uint8Array(24);
+      crypto.getRandomValues(bytes);
+      const temporaryPassword = Array.from(bytes, byte => alphabet[byte % alphabet.length]).join("");
+
+      await supabaseRequest("/rest/v1/rpc/commercial_admin_reset_password", {
+        method: "POST",
+        body: JSON.stringify({p_user_id:user.id,p_password:temporaryPassword})
+      });
+
+      const response = await fetch("/api/admin/reissue-coordinator", {
+        method: "POST",
+        headers: {"Content-Type":"application/json"},
+        body: JSON.stringify({userId:user.id})
+      });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({})) as {error?:string};
+        throw new Error("Senha substituída, mas o cadastro obrigatório não foi confirmado. " +
+          (data.error || "Verifique o Supabase.") + " Não entregue a senha.");
+      }
+      setTemporaryCredential({username:user.username,password:temporaryPassword});
+      setNotice("Acesso provisório gerado para " + user.display_name + ". Copie os dados abaixo.");
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Não foi possível gerar o acesso provisório.");
+    }
+  }
+
   async function deleteUser(user: CommercialUser) {
     const confirmed = window.confirm(
       `Excluir o usuário "${user.display_name}" (@${user.username})?\n\nO acesso será removido e o usuário deixará de aparecer no ADM. O histórico operacional e os leads serão preservados.`
@@ -683,6 +722,15 @@ export default function AdminPage() {
                       <div className="row-actions">
                         {!isPrimary && !isCommercialSector && (
                           <>
+                            {user.role === "coordinator" && user.active && (
+                              <button
+                                className="secondary-btn compact-action"
+                                type="button"
+                                onClick={() => void reissueCoordinatorAccess(user)}
+                                title="Gerar outra senha provisória para a coordenadora">
+                                Gerar acesso provisório
+                              </button>
+                            )}
                             <button
                               className="secondary-btn compact-action"
                               type="button"
