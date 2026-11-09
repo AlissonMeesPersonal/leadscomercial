@@ -5,7 +5,7 @@ const SESSION_SECRET = new TextEncoder().encode(
   process.env.SESSION_SECRET || "dev-only-change-this-secret"
 );
 
-export type CommercialRole = "admin" | "commercial" | "user";
+export type CommercialRole = "admin" | "commercial" | "coordinator" | "user";
 
 export type CommercialSession = {
   username: string;
@@ -17,7 +17,7 @@ export type CommercialSession = {
 };
 
 function isCommercialRole(value: unknown): value is CommercialRole {
-  return value === "admin" || value === "commercial" || value === "user";
+  return value === "admin" || value === "commercial" || value === "coordinator" || value === "user";
 }
 
 function sessionFromPayload(
