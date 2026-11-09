@@ -94,6 +94,13 @@ export default function AdminPage() {
   const [displayName, setDisplayName] = useState("");
   const [username, setUsername] = useState("");
   const [temporaryCredential, setTemporaryCredential] = useState<{ username:string; password:string } | null>(null);
+  useEffect(() => {
+    if (temporaryCredential) {
+      document.getElementById("temporary-credentials")?.scrollIntoView({
+        behavior: "smooth", block: "center"
+      });
+    }
+  }, [temporaryCredential]);
   const [role, setRole] = useState<"admin" | "commercial" | "coordinator" | "user">("user");
   const [unitId, setUnitId] = useState("");
 
@@ -606,7 +613,7 @@ export default function AdminPage() {
             </button>
           </form>
           {temporaryCredential && (
-            <div className="temporary-credentials" role="status">
+            <div id="temporary-credentials" className="temporary-credentials" role="status">
               <strong>Conta criada — acesso provisório</strong>
               <div className="temporary-credentials-copy">
                 <p>Leads: https://leadscomercial.vercel.app/login</p>
