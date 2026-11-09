@@ -4731,3 +4731,16 @@ html[data-theme="light"] .coordinator-filters input { color-scheme: light; }
   border-color: #f97316;
   outline-offset: 2px;
 }
+
+
+.temporary-credentials-copy {
+  margin: 12px 0;
+  padding: 12px;
+  border: 1px dashed var(--line);
+  border-radius: 9px;
+  background: var(--bg-soft);
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 12px;
+  user-select: text;
+}
+.temporary-credentials-copy p { margin: 5px 0; overflow-wrap: anywhere; }
