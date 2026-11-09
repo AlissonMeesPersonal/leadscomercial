@@ -69,7 +69,7 @@ type SessionInfo = {
   username: string;
   userId: string;
   displayName: string;
-  role: "admin" | "commercial" | "user";
+  role: "admin" | "commercial" | "coordinator" | "user";
   unitId: string | null;
   unitName: string | null;
 };
@@ -129,7 +129,7 @@ type OwnerUser = {
   id: string;
   username: string;
   display_name: string;
-  role: "admin" | "commercial" | "user";
+  role: "admin" | "commercial" | "coordinator" | "user";
 };
 
 const statusList: Status[] = ["Novo", "Em contato", "Interessado", "Sem retorno", "Convertido"];
