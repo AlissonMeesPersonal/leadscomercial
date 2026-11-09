@@ -4744,3 +4744,19 @@ html[data-theme="light"] .coordinator-filters input { color-scheme: light; }
   user-select: text;
 }
 .temporary-credentials-copy p { margin: 5px 0; overflow-wrap: anywhere; }
+
+
+/* Clear admin session verification errors without showing partial privileged data. */
+.admin-access-warning {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  margin-top: 18px;
+  padding: 20px;
+  border: 1px solid rgba(249,115,22,.4);
+  background: rgba(249,115,22,.08);
+  border-radius: 12px;
+}
+.admin-access-warning p { margin: 0; line-height: 1.6; }
+.admin-access-warning button { width: auto; max-width: 100%; }
