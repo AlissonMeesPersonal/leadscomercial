@@ -23,11 +23,6 @@ export async function middleware(request: NextRequest) {
     ));
   }
   if (isApi) return NextResponse.next();
-  if (session.role === "coordinator" &&
-      path !== "/dashboard/coordenacao" &&
-      !path.startsWith("/dashboard/coordenacao/")) {
-    return NextResponse.redirect(new URL("/dashboard/coordenacao",request.url));
-  }
   if (session.role !== "coordinator" && session.role !== "admin" &&
       path.startsWith("/dashboard/coordenacao")) {
     return NextResponse.redirect(new URL("/dashboard",request.url));
