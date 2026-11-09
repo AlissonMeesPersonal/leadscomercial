@@ -18,6 +18,7 @@ export default function LoginPage() {
 
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -83,16 +84,30 @@ export default function LoginPage() {
             />
           </label>
 
-          <label>
-            Senha
+          <label htmlFor="login-password">Senha</label>
+          <div className="activation-password-field">
             <input
-              type="password"
+              id="login-password"
+              type={showPassword ? "text" : "password"}
               value={password}
               onChange={(event) => setPassword(event.target.value)}
               autoComplete="current-password"
               required
             />
-          </label>
+            <button
+              type="button"
+              className="activation-eye-button"
+              aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}
+              aria-pressed={showPassword}
+              onClick={() => setShowPassword((current) => !current)}
+            >
+              <svg aria-hidden="true" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z" />
+                <circle cx="12" cy="12" r="3" />
+                {showPassword && <path d="M3 3l18 18" />}
+              </svg>
+            </button>
+          </div>
 
           {errorMessage && (
             <div className="alert">{errorMessage}</div>
