@@ -10,6 +10,7 @@ type LoginResponse = {
   accessToken?: string;
   error?: string;
   role?: string;
+  needsPasswordChange?: boolean;
 };
 
 export default function LoginPage() {
@@ -46,7 +47,7 @@ export default function LoginPage() {
         data.accessToken
       );
 
-      router.push(data.role === "coordinator" ? "/dashboard/coordenacao" : "/dashboard");
+      router.push(data.needsPasswordChange ? "/ativar-senha" : data.role === "coordinator" ? "/dashboard/coordenacao" : "/dashboard");
       router.refresh();
     } catch (error) {
       setErrorMessage(
