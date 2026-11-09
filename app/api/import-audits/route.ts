@@ -54,7 +54,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   const ctx = await context();
-  if (!ctx) return NextResponse.json({ error: "Não autorizado." }, { status: 403 });
+  if (!ctx || ctx.session.role === "coordinator") return NextResponse.json({ error: "Não autorizado para alterações." }, { status: 403 });
   const origin = request.headers.get("origin");
   if (origin && new URL(origin).origin !== new URL(request.url).origin) {
     return NextResponse.json({ error: "Origem inválida." }, { status: 403 });
