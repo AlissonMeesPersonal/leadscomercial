@@ -1,44 +1,84 @@
--- Aplicar no banco do projeto Leads Comercial (efahamylmoueniflnvzl).
--- Não apaga usuários, registros, senhas ou unidades.
--- Executar ANTES de cadastrar uma nova coordenadora.
--- Executar no SQL Editor do Supabase do Leads Comercial.
--- Amplia somente a lista de perfis permitidos, sem criar ou apagar usuários.
+-- Leads Comercial: habilitar o papel de Coordenadora Comercial sem mudar contas existentes.
+-- Execute SOMENTE no banco usado pela aplicação (atualmente o código aponta para
+-- o Supabase de referência efahamylmoueniflnvzl).
+-- Seguro para executar novamente. Não atualiza ou apaga usuários/senhas.
+BEGIN;
+
 DO $$
 DECLARE
-  c record;
-  role_type text;
+  constraint_row record;
+  role_col_type text;
 BEGIN
-  SELECT format_type(a.atttypid, a.atttypmod) INTO role_type
+  SELECT format_type(a.atttypid, a.atttypmod)
+    INTO role_col_type
   FROM pg_attribute a
   WHERE a.attrelid = 'public.commercial_users'::regclass
     AND a.attname = 'role' AND NOT a.attisdropped;
 
-  IF role_type IS NULL THEN RAISE EXCEPTION 'Coluna commercial_users.role não encontrada'; END IF;
-
-  IF role_type = 'text' OR role_type LIKE 'character varying%' THEN
-    FOR c IN SELECT conname, pg_get_constraintdef(oid) AS def
-      FROM pg_constraint
-      WHERE conrelid = 'public.commercial_users'::regclass AND contype = 'c'
-        AND pg_get_constraintdef(oid) ILIKE '%role%'
-    LOOP
-      -- Recusa alterar condições combinadas que não conhecemos.
-      IF c.def ILIKE '% AND %' OR c.def ILIKE '% OR %' THEN
-        RAISE EXCEPTION 'Validação combinada % necessita revisão manual: %', c.conname, c.def;
-      END IF;
-      EXECUTE format('ALTER TABLE public.commercial_users DROP CONSTRAINT %I', c.conname);
-    END LOOP;
-    ALTER TABLE public.commercial_users
-      ADD CONSTRAINT commercial_users_role_allowed
-      CHECK (role IN ('admin','commercial','coordinator','user'));
-  ELSE
-    RAISE EXCEPTION 'Tipo de role (%) não tratado automaticamente; revise o enum antes de criar coordenadora', role_type;
+  IF role_col_type IS NULL OR
+     (role_col_type <> 'text' AND role_col_type NOT LIKE 'character varying%') THEN
+    RAISE EXCEPTION 'Tipo da coluna role não suportado (%). Nenhuma regra foi alterada.', role_col_type;
   END IF;
+
+  -- A regra que apareceu no erro exige unidade para qualquer perfil
+  -- que não seja admin/commercial. Adicionamos coordinator à mesma exceção.
+  FOR constraint_row IN
+    SELECT conname, pg_get_constraintdef(oid) AS definition
+    FROM pg_constraint
+    WHERE conrelid = 'public.commercial_users'::regclass
+      AND contype = 'c' AND conname = 'commercial_users_unit_required'
+  LOOP
+    IF constraint_row.definition NOT ILIKE '%role%'
+       OR constraint_row.definition NOT ILIKE '%unit_id%' THEN
+      RAISE EXCEPTION 'A regra % tem conteúdo inesperado: %',
+        constraint_row.conname, constraint_row.definition;
+    END IF;
+    ALTER TABLE public.commercial_users
+      DROP CONSTRAINT commercial_users_unit_required;
+  END LOOP;
+
+  ALTER TABLE public.commercial_users
+    ADD CONSTRAINT commercial_users_unit_required
+    CHECK (role IN ('admin', 'commercial', 'coordinator') OR unit_id IS NOT NULL);
+
+  -- Altera apenas validações dedicadas à lista de papéis, não regras
+  -- que combinem role com outras condições de segurança.
+  FOR constraint_row IN
+    SELECT conname, pg_get_constraintdef(oid) AS definition
+    FROM pg_constraint
+    WHERE conrelid = 'public.commercial_users'::regclass
+      AND contype = 'c'
+      AND pg_get_constraintdef(oid) ILIKE '%role%'
+      AND conname <> 'commercial_users_unit_required'
+  LOOP
+    IF constraint_row.definition ILIKE '%unit_id%'
+       OR constraint_row.definition ILIKE '% AND %'
+       OR constraint_row.definition ILIKE '% OR %' THEN
+      RAISE EXCEPTION 'Validação combinada % precisa de revisão: %',
+        constraint_row.conname, constraint_row.definition;
+    END IF;
+    EXECUTE format(
+      'ALTER TABLE public.commercial_users DROP CONSTRAINT %I',
+      constraint_row.conname
+    );
+  END LOOP;
+
+  ALTER TABLE public.commercial_users
+    ADD CONSTRAINT commercial_users_role_allowed
+    CHECK (role IN ('admin', 'commercial', 'coordinator', 'user'));
 END $$;
 
--- Caso commercial_admin_create_user valide explicitamente p_role,
--- essa função também precisará aceitar 'coordinator'.
--- Confira sua definição sem expor senhas:
-SELECT pg_get_functiondef(p.oid)
-FROM pg_proc p
-WHERE p.pronamespace = 'public'::regnamespace
-  AND p.proname = 'commercial_admin_create_user';
+COMMIT;
+
+-- Verifique que ambas as regras agora incluem coordinator:
+SELECT conname, pg_get_constraintdef(oid) AS definicao
+FROM pg_constraint
+WHERE conrelid = 'public.commercial_users'::regclass
+  AND conname IN ('commercial_users_unit_required', 'commercial_users_role_allowed')
+ORDER BY conname;
+
+-- Inspecione o perfil da conta criada na tentativa anterior
+-- (a consulta não altera o cadastro):
+SELECT username, role, unit_id, active
+FROM public.commercial_users
+WHERE lower(username) = 'andressa';
