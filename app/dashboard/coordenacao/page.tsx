@@ -61,9 +61,9 @@ export default function CoordinatorDashboard() {
       <div>
         <p className="eyebrow">GESTÃO DO COMERCIAL</p>
         <h1>Coordenação Comercial</h1>
-        <p className="session-line">Acompanhamento da equipe · acesso somente leitura</p>
+        <p className="session-line">Visão de todas as unidades · indicadores somente leitura</p>
       </div>
-      <div className="topbar-actions"><ThemeToggle /><button type="button" className="ghost-btn" onClick={logout}>Sair</button></div>
+      <div className="topbar-actions"><ThemeToggle /><a href="/dashboard" className="ghost-btn">Operação comercial</a><button type="button" className="ghost-btn" onClick={logout}>Sair</button></div>
     </header>
     <section className="file-manager-page coordinator-page">
       <div className="file-manager-title">
