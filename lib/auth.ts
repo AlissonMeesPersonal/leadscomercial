@@ -14,6 +14,7 @@ export type CommercialSession = {
   userId: string;
   unitId: string | null;
   unitName: string | null;
+  needsPasswordChange?: boolean;
 };
 
 function isCommercialRole(value: unknown): value is CommercialRole {
@@ -38,7 +39,8 @@ function sessionFromPayload(
     role: payload.role,
     userId: payload.userId,
     unitId: payload.unitId ?? null,
-    unitName: payload.unitName ?? null
+    unitName: payload.unitName ?? null,
+    needsPasswordChange: payload.needsPasswordChange === true
   };
 }
 
