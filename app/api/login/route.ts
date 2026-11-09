@@ -160,8 +160,9 @@ async function needsPasswordSetup(userId: string): Promise<boolean> {
     { headers: { apikey:key,Authorization:`Bearer ${key}` }, cache:"no-store" }
   );
   if (!response.ok) {
-    // Do not break older users during a migration outage.
-    return false;
+    // Never allow a new account with a pending setup to bypass the activation
+    // solely because the database was temporarily unavailable.
+    throw new Error("Não foi possível verificar a ativação da senha.");
   }
   const rows = await response.json() as {must_change_password:boolean}[];
   return rows[0]?.must_change_password === true;
@@ -207,6 +208,13 @@ export async function POST(request: Request) {
   }
 
   const session = sessionFromDbUser(dbUser);
-  session.needsPasswordChange = await needsPasswordSetup(dbUser.user_id);
+  try {
+    session.needsPasswordChange = await needsPasswordSetup(dbUser.user_id);
+  } catch {
+    return NextResponse.json(
+      { error: "Validação de ativação temporariamente indisponível. Tente novamente mais tarde." },
+      { status: 503 }
+    );
+  }
   return createLoginResponse(session, dbUser.access_token);
 }
