@@ -19,7 +19,7 @@ type CommercialUser = {
   id: string;
   username: string;
   display_name: string;
-  role: "admin" | "commercial" | "user";
+  role: "admin" | "commercial" | "coordinator" | "user";
   unit_id: string | null;
   active: boolean;
   last_login_at: string | null;
@@ -94,7 +94,7 @@ export default function AdminPage() {
   const [displayName, setDisplayName] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState<"admin" | "commercial" | "user">("user");
+  const [role, setRole] = useState<"admin" | "commercial" | "coordinator" | "user">("user");
   const [unitId, setUnitId] = useState("");
 
   const activeUnits = useMemo(
@@ -506,13 +506,14 @@ export default function AdminPage() {
               <select
                 value={role}
                 onChange={(event) => {
-                  const next = event.target.value as "admin" | "commercial" | "user";
+                  const next = event.target.value as "admin" | "commercial" | "coordinator" | "user";
                   setRole(next);
                   if (next !== "user") setUnitId("");
                 }}
               >
                 <option value="user">Usuário da unidade</option>
                 <option value="commercial">Setor Comercial</option>
+                <option value="coordinator">Coordenadora Comercial (somente relatórios)</option>
                 <option value="admin">Administrador</option>
               </select>
             </label>
@@ -591,6 +592,8 @@ export default function AdminPage() {
                           ? "Administrador"
                           : user.role === "commercial"
                             ? "Setor Comercial"
+                            : user.role === "coordinator"
+                              ? "Coordenadora Comercial"
                             : "Usuário"}
                       </strong>
                       <small>
