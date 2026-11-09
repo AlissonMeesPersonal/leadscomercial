@@ -9,6 +9,7 @@ const COMMERCIAL_ACCESS_KEY = "commercial-supabase-access";
 type LoginResponse = {
   accessToken?: string;
   error?: string;
+  role?: string;
 };
 
 export default function LoginPage() {
@@ -45,7 +46,7 @@ export default function LoginPage() {
         data.accessToken
       );
 
-      router.push("/dashboard");
+      router.push(data.role === "coordinator" ? "/dashboard/coordenacao" : "/dashboard");
       router.refresh();
     } catch (error) {
       setErrorMessage(
