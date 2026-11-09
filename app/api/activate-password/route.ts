@@ -17,10 +17,10 @@ export async function POST(request:Request) {
   let body:{password?:unknown;confirmation?:unknown;temporaryPassword?:unknown};
   try {body=await request.json();}catch {return NextResponse.json({error:"Dados inválidos."},{status:400});}
   const password=body.password;
-  if (typeof password!=="string" || password.length<12 || password.length>128 ||
+  if (typeof password!=="string" || password.length!==8 ||
     !/[a-z]/.test(password)||!/[A-Z]/.test(password)||!/[0-9]/.test(password) ||
     password!==body.confirmation || password===body.temporaryPassword)
-    return NextResponse.json({error:"Use uma senha diferente da provisória, com 12 caracteres ou mais, letras maiúsculas, minúsculas e números; confirme-a corretamente."},{status:400});
+    return NextResponse.json({error:"Use uma senha diferente da provisória, com exatamente 8 caracteres, letras maiúsculas, minúsculas e números; confirme-a corretamente."},{status:400});
   if (typeof body.temporaryPassword!=="string" || body.temporaryPassword.length<8)
     return NextResponse.json({error:"Informe sua senha provisória para confirmar a troca."},{status:400});
   const key=process.env.SUPABASE_SERVICE_ROLE_KEY;
