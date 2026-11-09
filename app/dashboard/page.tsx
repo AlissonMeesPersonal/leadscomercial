@@ -2363,8 +2363,8 @@ export default function DashboardPage() {
             <p className="session-line">
               {sessionInfo.role === "admin"
                 ? `Administrador · ${sessionInfo.displayName}`
-                : sessionInfo.role === "commercial"
-                  ? `Setor Comercial · carteira própria · ${
+                : sessionInfo.role === "commercial" || sessionInfo.role === "coordinator"
+                  ? `${sessionInfo.role === "coordinator" ? "Coordenadora Comercial" : "Setor Comercial"} · carteira própria · ${
                       unitFilter === "Todas"
                         ? "todas as unidades"
                         : unitById.get(unitFilter)?.name || "unidade selecionada"
@@ -2471,15 +2471,13 @@ export default function DashboardPage() {
           <span>Atendimentos</span>
           <strong>↗</strong>
         </button>
-        {sessionInfo?.role === "admin" && (
-          <button
-            type="button"
-            className={showCoordinatorTab ? "demand-tab coordinator-tab active" : "demand-tab coordinator-tab"}
-            onClick={() => { setShowCoordinatorTab(true); setShowFilesTab(false); setShowActivityTab(false); setNotice(""); }}
-          >
+        {(sessionInfo?.role === "admin" || sessionInfo?.role === "coordinator") && (
+          <a href="/dashboard/coordenacao"
+             className="demand-tab coordinator-tab"
+             title="Acompanhar a produtividade de todos os colaboradores">
             <span>Coordenação Comercial</span>
             <strong>◎</strong>
-          </button>
+          </a>
         )}
       </section>
 
