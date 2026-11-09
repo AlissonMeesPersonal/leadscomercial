@@ -154,7 +154,7 @@ async function createLoginResponse(
 
 async function needsPasswordSetup(userId: string): Promise<boolean> {
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!key) return false; // Existing accounts follow their unchanged login flow.
+  if (!key) throw new Error("Configuração de ativação indisponível.");
   const response = await fetch(
     `${SUPABASE_URL}/rest/v1/commercial_password_activation?user_id=eq.${encodeURIComponent(userId)}&select=must_change_password`,
     { headers: { apikey:key,Authorization:`Bearer ${key}` }, cache:"no-store" }
