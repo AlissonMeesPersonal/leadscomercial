@@ -38,15 +38,28 @@ export async function POST(request:Request) {
   const check=await fetch(`${DB}/rest/v1/commercial_password_activation?user_id=eq.${encodeURIComponent(current.userId)}&must_change_password=eq.true&select=user_id`,{headers:privileged,cache:"no-store"});
   if (!check.ok || !(await check.json() as {user_id:string}[]).length)
     return NextResponse.json({error:"Ativação inexistente ou já concluída."},{status:409});
-  // Usa a rotina de senha já presente no banco, preservando seu formato de hash.
-  // Se a rotina exigir administrador, falha sem liberar o acesso; uma função
-  // self-service deverá ser implementada no banco após revisão de seu código.
-  const changed=await fetch(`${DB}/rest/v1/rpc/commercial_admin_reset_password`,{
+  // Rotina restrita ao service_role. No banco, a mesma transação valida
+  // a senha provisória, grava o novo hash e encerra a ativação.
+  // Nunca chama a função de redefinição destinada ao administrador.
+  const changed=await fetch(`${DB}/rest/v1/rpc/commercial_complete_initial_password`,{
     method:"POST",
-    headers:{apikey:key,Authorization:`Bearer ${key}`,"x-client-info":initialRows[0].access_token,"Content-Type":"application/json"},
-    body:JSON.stringify({p_user_id:current.userId,p_password:password}),cache:"no-store"
+    headers:privileged,
+    body:JSON.stringify({
+      p_user_id:current.userId,
+      p_temporary_password:body.temporaryPassword,
+      p_new_password:password
+    }),
+    cache:"no-store"
   });
-  if (!changed.ok) return NextResponse.json({error:"O banco não permitiu a troca automática. A rotina de senha precisa ser habilitada para a própria conta, sem conceder permissões administrativas."},{status:503});
+  if (!changed.ok) {
+    return NextResponse.json({
+      error:"Não foi possível finalizar sua senha. O administrador precisa executar a migração complete-initial-password.sql no banco antes de tentar novamente."
+    },{status:503});
+  }
+  const complete=await changed.json().catch(()=>null) as boolean|null;
+  if(complete!==true) {
+    return NextResponse.json({error:"A troca da senha não foi confirmada pelo banco."},{status:503});
+  }
   // Confirma que o login normal agora reconhece a senha nova.
   const login=await fetch(`${DB}/rest/v1/rpc/commercial_user_login`,{
     method:"POST",headers:{apikey:PUBLISHABLE,"Content-Type":"application/json"},
@@ -56,12 +69,6 @@ export async function POST(request:Request) {
   const rows=await login.json() as Login[];
   if (!rows.length || rows[0].user_id!==current.userId || !rows[0].access_token)
     return NextResponse.json({error:"A nova senha não foi validada; a ativação permanece pendente."},{status:503});
-  const updated=await fetch(`${DB}/rest/v1/commercial_password_activation?user_id=eq.${encodeURIComponent(current.userId)}&must_change_password=eq.true&select=user_id`,{
-    method:"PATCH",headers:{...privileged,Prefer:"return=representation"},
-    body:JSON.stringify({must_change_password:false,completed_at:new Date().toISOString()}),cache:"no-store"
-  });
-  if (!updated.ok || !(await updated.json() as {user_id:string}[]).length)
-    return NextResponse.json({error:"Senha alterada, mas a ativação não foi finalizada. Contate o administrador."},{status:503});
   const refreshed=await createSession({...current,needsPasswordChange:false});
   const response=NextResponse.json({ok:true,accessToken:rows[0].access_token,role:current.role});
   response.cookies.set("lead_session",refreshed,{httpOnly:true,secure:process.env.NODE_ENV==="production",sameSite:"lax",path:"/",maxAge:60*60*12});
