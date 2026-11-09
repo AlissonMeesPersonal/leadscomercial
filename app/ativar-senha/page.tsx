@@ -52,7 +52,11 @@ export default function ActivatePasswordPage() {
             <button type="button" className="activation-eye-button"
               aria-label={visibleFields.temporary?"Ocultar senha provisória":"Mostrar senha provisória"}
               aria-pressed={visibleFields.temporary} onClick={()=>toggleField("temporary")}>
-              {visibleFields.temporary ? "Ocultar" : "Ver"}
+              <svg aria-hidden="true" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"/>
+                <circle cx="12" cy="12" r="3"/>
+                {visibleFields.temporary && <path d="M3 3l18 18"/>}
+              </svg>
             </button>
           </div>
           <label htmlFor="new-password">Nova senha</label>
@@ -63,7 +67,11 @@ export default function ActivatePasswordPage() {
             <button type="button" className="activation-eye-button"
               aria-label={visibleFields.password?"Ocultar nova senha":"Mostrar nova senha"}
               aria-pressed={visibleFields.password} onClick={()=>toggleField("password")}>
-              {visibleFields.password ? "Ocultar" : "Ver"}
+              <svg aria-hidden="true" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"/>
+                <circle cx="12" cy="12" r="3"/>
+                {visibleFields.password && <path d="M3 3l18 18"/>}
+              </svg>
             </button>
           </div>
           <label htmlFor="confirm-password">Confirmar nova senha</label>
@@ -74,7 +82,11 @@ export default function ActivatePasswordPage() {
             <button type="button" className="activation-eye-button"
               aria-label={visibleFields.confirmation?"Ocultar confirmação":"Mostrar confirmação"}
               aria-pressed={visibleFields.confirmation} onClick={()=>toggleField("confirmation")}>
-              {visibleFields.confirmation ? "Ocultar" : "Ver"}
+              <svg aria-hidden="true" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"/>
+                <circle cx="12" cy="12" r="3"/>
+                {visibleFields.confirmation && <path d="M3 3l18 18"/>}
+              </svg>
             </button>
           </div>
           <p className="muted">A senha pessoal deve ter 8 caracteres, incluindo letras maiúsculas, minúsculas e números.</p>
