@@ -10,6 +10,11 @@ export async function middleware(request: NextRequest) {
   const isApi = path.startsWith("/api/");
   if (!session) {
     if (isApi) return NextResponse.next();
+  if (path.startsWith("/admin") && session.role !== "admin") {
+    return NextResponse.redirect(new URL(
+      session.role === "coordinator" ? "/dashboard/coordenacao" : "/dashboard", request.url
+    ));
+  }
     return NextResponse.redirect(new URL("/login",request.url));
   }
   if (session.needsPasswordChange) {
