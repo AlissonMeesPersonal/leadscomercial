@@ -1,3 +1,6 @@
+-- Aplicar no banco do projeto Leads Comercial (efahamylmoueniflnvzl).
+-- Não apaga usuários, registros, senhas ou unidades.
+-- Executar ANTES de cadastrar uma nova coordenadora.
 -- Executar no SQL Editor do Supabase do Leads Comercial.
 -- Amplia somente a lista de perfis permitidos, sem criar ou apagar usuários.
 DO $$
