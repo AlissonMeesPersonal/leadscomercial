@@ -254,6 +254,11 @@ export default function AdminPage() {
     }
 
     try {
+      const setupCheck=await fetch("/api/admin/password-activation",{cache:"no-store"});
+      if(!setupCheck.ok) {
+        const checkData=await setupCheck.json().catch(()=>({})) as {error?:string};
+        throw new Error(checkData.error || "Ative o sistema de senhas provisórias no Supabase antes de criar usuários.");
+      }
       const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
       const bytes = new Uint8Array(24);
       crypto.getRandomValues(bytes);
