@@ -93,7 +93,7 @@ export default function AdminPage() {
 
   const [displayName, setDisplayName] = useState("");
   const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
+  const [temporaryCredential, setTemporaryCredential] = useState<{ username:string; password:string } | null>(null);
   const [role, setRole] = useState<"admin" | "commercial" | "coordinator" | "user">("user");
   const [unitId, setUnitId] = useState("");
 
@@ -246,6 +246,7 @@ export default function AdminPage() {
   async function createUser(event: FormEvent) {
     event.preventDefault();
     setNotice("");
+    setTemporaryCredential(null);
 
     if (role === "user" && !unitId) {
       setNotice("Selecione uma unidade para o usuário.");
@@ -253,12 +254,16 @@ export default function AdminPage() {
     }
 
     try {
+      const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
+      const bytes = new Uint8Array(24);
+      crypto.getRandomValues(bytes);
+      const tempPassword = Array.from(bytes, (byte) => alphabet[byte % alphabet.length]).join("");
       await supabaseRequest("/rest/v1/rpc/commercial_admin_create_user", {
         method: "POST",
         body: JSON.stringify({
           p_username: username,
           p_display_name: displayName,
-          p_password: password,
+          p_password: tempPassword,
           p_unit_id: unitId || null,
           // Usa a rotina de criação já existente e ativa o perfil gerencial
           // somente depois da validação do administrador no servidor.
@@ -278,9 +283,19 @@ export default function AdminPage() {
         }
       }
 
+      const setupResponse = await fetch("/api/admin/password-activation", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username })
+      });
+      if (!setupResponse.ok) {
+        const result = await setupResponse.json().catch(() => ({})) as {error?:string};
+        throw new Error("Conta criada, mas a ativação da senha falhou: " + (result.error || "verifique o Supabase") + ". Não entregue a senha até corrigir a ativação.");
+      }
+
+      setTemporaryCredential({ username, password: tempPassword });
       setDisplayName("");
       setUsername("");
-      setPassword("");
       setRole("user");
       setUnitId("");
       setNotice(role === "coordinator" ? "Coordenadora Comercial criada! Ela poderá acessar somente o painel gerencial." : "Usuário criado com sucesso.");
@@ -505,15 +520,7 @@ export default function AdminPage() {
 
             <label>
               Senha inicial
-              <input
-                type="password"
-                minLength={6}
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                placeholder="Mínimo 6 caracteres"
-                autoComplete="new-password"
-                required
-              />
+              <p className="admin-role-help">Uma senha provisória forte será gerada automaticamente após criar a conta. O usuário precisará trocá-la no primeiro acesso.</p>
             </label>
 
             <label>
@@ -555,6 +562,19 @@ export default function AdminPage() {
               Criar usuário
             </button>
           </form>
+          {temporaryCredential && (
+            <div className="temporary-credentials" role="status">
+              <strong>Conta criada — acesso provisório</strong>
+              <p>Usuário: <code>{temporaryCredential.username}</code></p>
+              <p>Senha provisória: <code>{temporaryCredential.password}</code></p>
+              <button type="button" className="ghost-btn" onClick={() => {
+                void navigator.clipboard.writeText(
+                  `Usuário: ${temporaryCredential.username}\nSenha provisória: ${temporaryCredential.password}`
+                );
+              }}>Copiar acesso</button>
+              <small>Compartilhe por canal seguro. Esta senha aparece apenas nesta criação e será obrigatoriamente trocada.</small>
+            </div>
+          )}
         </article>
       </section>
 
