@@ -42,7 +42,7 @@ async function context() {
 
 export async function POST(request: Request) {
   const ctx = await context();
-  if (!ctx) return NextResponse.json({ error: "Registro indisponível: sessão ou configuração inválida." }, { status: 403 });
+  if (!ctx || ctx.session.role === "coordinator") return NextResponse.json({ error: "Registro indisponível: perfil somente leitura ou sessão inválida." }, { status: 403 });
   const origin = request.headers.get("origin");
   if (origin && origin !== new URL(request.url).origin)
     return NextResponse.json({ error: "Origem inválida." }, { status: 403 });
