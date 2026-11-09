@@ -4675,3 +4675,26 @@ html[data-theme="light"] .coordinator-filters input { color-scheme: light; }
   .coordinator-filters,.coordinator-summary { grid-template-columns: 1fr; }
   .coordinator-status,.coordinator-staff { padding: 12px; }
 }
+
+
+/* Primeiro acesso: senha pessoal definida pelo próprio usuário. */
+.activation-show-password {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center;
+  gap: 9px;
+  font-size: 13px;
+}
+.activation-show-password input { width: 17px; height: 17px; margin: 0; }
+.temporary-credentials {
+  margin-top: 15px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--bg-soft);
+  overflow-wrap: anywhere;
+}
+.temporary-credentials strong { display: block; margin-bottom: 10px; }
+.temporary-credentials p { margin: 6px 0; font-size: 13px; }
+.temporary-credentials code { font-family: ui-monospace, monospace; user-select: all; }
+.temporary-credentials small { display: block; margin-top: 10px; color: var(--muted); line-height: 1.5; }
