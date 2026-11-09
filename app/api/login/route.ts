@@ -14,7 +14,7 @@ type DbLoginRow = {
   user_id: string;
   username: string;
   display_name: string;
-  role: "admin" | "commercial" | "user";
+  role: "admin" | "commercial" | "coordinator" | "user";
   unit_id: string | null;
   unit_name: string | null;
   access_token: string;
