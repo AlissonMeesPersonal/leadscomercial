@@ -9,7 +9,6 @@ export async function PATCH(request: Request) {
   const session = await getSession((await cookies()).get("lead_session")?.value);
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!session) return NextResponse.json({ error: "Sessão expirada." }, { status: 401 });
-  if (session.role === "coordinator") return NextResponse.json({ error: "Perfil gerencial é somente leitura." }, { status: 403 });
   if (!key) return NextResponse.json({ error: "Servidor sem chave de banco configurada." }, { status: 503 });
 
   const origin = request.headers.get("origin");
