@@ -94,6 +94,9 @@ export default function AdminPage() {
   const [displayName, setDisplayName] = useState("");
   const [username, setUsername] = useState("");
   const [temporaryCredential, setTemporaryCredential] = useState<{ username:string; password:string } | null>(null);
+  const [adminAccess, setAdminAccess] = useState<"checking" | "verified" | "relogin" | "denied">("checking");
+  const [adminAccessMessage, setAdminAccessMessage] = useState("");
+
   useEffect(() => {
     if (temporaryCredential) {
       document.getElementById("temporary-credentials")?.scrollIntoView({
@@ -183,40 +186,66 @@ export default function AdminPage() {
     };
   }, [users, leadActivity]);
 
+  async function restartAdminLogin() {
+    sessionStorage.removeItem(COMMERCIAL_ACCESS_KEY);
+    await fetch("/api/logout", { method:"POST" }).catch(() => undefined);
+    location.replace("/login");
+  }
+
   async function loadData() {
-    if (!sessionStorage.getItem(COMMERCIAL_ACCESS_KEY)) {
-      location.href = "/login";
-      return;
-    }
-
     setLoading(true);
-
+    setAdminAccess("checking");
     try {
-      const [unitResponse, userResponse, leadResponse] = await Promise.all([
-        supabaseRequest(
-          "/rest/v1/commercial_units?select=id,name,city,active,created_at&order=name.asc"
-        ),
-        supabaseRequest(
-          "/rest/v1/commercial_users?select=id,username,display_name,role,unit_id,active,last_login_at,created_at&deleted_at=is.null&order=created_at.asc"
-        ),
-        supabaseRequest(
-          "/rest/v1/commercial_leads?select=owner_user_id,demand_type,status,source,created_at&order=created_at.desc"
-        )
-      ]);
+      const sessionResponse = await fetch("/api/admin/access-check", {cache:"no-store"});
+      const check = await sessionResponse.json() as {
+        authorized?:boolean; username?:string; reason?:string
+      };
+      if (!sessionResponse.ok || !check.authorized) {
+        setAdminAccess(check.reason==="database_role_mismatch" || check.reason==="session_not_admin" ? "denied" : "relogin");
+        setAdminAccessMessage(
+          check.reason==="database_role_mismatch" || check.reason==="session_not_admin"
+            ? "A sessão atual não possui o perfil Administrador confirmado no banco. Entre com sua conta administrativa ou revise o perfil cadastrado."
+            : "Sua sessão administrativa precisa ser atualizada. Entre novamente com a conta Administrador."
+        );
+        setUnits([]); setUsers([]); setLeadActivity([]);
+        return;
+      }
+      if (!sessionStorage.getItem(COMMERCIAL_ACCESS_KEY)) {
+        setAdminAccess("relogin");
+        setAdminAccessMessage("O token de dados não está disponível. Entre novamente com sua conta administrativa.");
+        setUnits([]); setUsers([]); setLeadActivity([]);
+        return;
+      }
 
+      const [unitResponse, userResponse, leadResponse] = await Promise.all([
+        supabaseRequest("/rest/v1/commercial_units?select=id,name,city,active,created_at&order=name.asc"),
+        supabaseRequest("/rest/v1/commercial_users?select=id,username,display_name,role,unit_id,active,last_login_at,created_at&deleted_at=is.null&order=created_at.asc"),
+        supabaseRequest("/rest/v1/commercial_leads?select=owner_user_id,demand_type,status,source,created_at&order=created_at.desc")
+      ]);
       const [unitRows, userRows, leadRows] = await Promise.all([
         unitResponse.json() as Promise<Unit[]>,
         userResponse.json() as Promise<CommercialUser[]>,
         leadResponse.json() as Promise<LeadActivity[]>
       ]);
 
+      const ownAccount=userRows.find(user=>user.username.toLowerCase()===check.username?.toLowerCase());
+      if (!ownAccount || ownAccount.role!=="admin" || !ownAccount.active) {
+        setAdminAccess("relogin");
+        setAdminAccessMessage("O token de dados do navegador não corresponde à conta administradora. Faça login novamente para renovar as credenciais.");
+        setUnits([]); setUsers([]); setLeadActivity([]);
+        return;
+      }
+
       setUnits(unitRows);
       setUsers(userRows);
       setLeadActivity(leadRows);
+      setAdminAccess("verified");
+      setAdminAccessMessage("");
+      setNotice("");
     } catch (err) {
-      setNotice(
-        err instanceof Error ? err.message : "Não foi possível carregar o painel."
-      );
+      setAdminAccess("relogin");
+      setAdminAccessMessage(err instanceof Error ? err.message : "Não foi possível validar o acesso administrativo.");
+      setUnits([]); setUsers([]); setLeadActivity([]);
     } finally {
       setLoading(false);
     }
@@ -463,6 +492,21 @@ export default function AdminPage() {
 
       {notice && <div className="notice">{notice}</div>}
 
+      {adminAccess !== "verified" && (
+        <section className="admin-access-warning" role="alert">
+          <strong>{adminAccess === "checking" ? "Validando acesso administrativo..." : "Acesso administrativo não confirmado"}</strong>
+          {adminAccess !== "checking" && (
+            <>
+              <p>{adminAccessMessage}</p>
+              <button className="primary-btn" type="button" onClick={() => void restartAdminLogin()}>
+                Entrar novamente como Administrador
+              </button>
+            </>
+          )}
+        </section>
+      )}
+      {adminAccess === "verified" && (
+      <>
       <section className="metrics admin-metrics">
         <article>
           <span>Usuários ativos</span>
@@ -781,6 +825,8 @@ export default function AdminPage() {
           </table>
         </div>
       </section>
+      </>
+      )}
     </main>
   );
 }
