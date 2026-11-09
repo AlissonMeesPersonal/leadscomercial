@@ -827,6 +827,11 @@ export default function DashboardPage() {
   const [savedImportAudits, setSavedImportAudits] = useState<SavedImportAudit[]>([]);
   const [showFilesTab, setShowFilesTab] = useState(false);
   const [showActivityTab, setShowActivityTab] = useState(false);
+  const [showCoordinatorTab, setShowCoordinatorTab] = useState(false);
+  const [coordinatorOwnerFilter, setCoordinatorOwnerFilter] = useState("Todos");
+  const [coordinatorUnitFilter, setCoordinatorUnitFilter] = useState("Todas");
+  const [coordinatorFrom, setCoordinatorFrom] = useState("");
+  const [coordinatorTo, setCoordinatorTo] = useState("");
   const [contactEvents, setContactEvents] = useState<ContactEvent[]>([]);
   const [contactEventsError, setContactEventsError] = useState("");
   const [activityOwnerFilter, setActivityOwnerFilter] = useState("Todos");
@@ -1007,7 +1012,7 @@ export default function DashboardPage() {
   }, [loaded, sessionInfo]);
 
   useEffect(() => {
-    if (!showActivityTab || !sessionInfo) return;
+    if ((!showActivityTab && !showCoordinatorTab) || !sessionInfo) return;
     let stopped = false;
     async function loadEvents() {
       try {
@@ -1028,7 +1033,7 @@ export default function DashboardPage() {
     void loadEvents();
     const refresh = window.setInterval(() => { void loadEvents(); }, 30000);
     return () => { stopped = true; window.clearInterval(refresh); };
-  }, [showActivityTab, sessionInfo]);
+  }, [showActivityTab, showCoordinatorTab, sessionInfo]);
 
   const ownerById = useMemo(
     () => new Map(owners.map((owner) => [owner.id, owner] as const)),
@@ -2281,9 +2286,67 @@ export default function DashboardPage() {
     (!activityDateFilter || new Date(event.occurred_at).toLocaleDateString("en-CA", {timeZone:"America/Sao_Paulo"}) === activityDateFilter)
   ), [contactEvents, activityOwnerFilter, activityDemandFilter, activityDateFilter]);
 
+  // Datas filtram os inícios de atendimento, não a data da conversão.
+  // Status são a fotografia atual de cada carteira (sem histórico de mudança).
+  const coordinatorData = useMemo(() => {
+    const scopedLeads = leads.filter((lead) =>
+      (coordinatorOwnerFilter === "Todos" || lead.ownerUserId === coordinatorOwnerFilter) &&
+      (coordinatorUnitFilter === "Todas" || lead.unitId === coordinatorUnitFilter)
+    );
+    const scopedEvents = contactEvents.filter((event) => {
+      if (coordinatorOwnerFilter !== "Todos" && event.actor_user_id !== coordinatorOwnerFilter) return false;
+      if (coordinatorUnitFilter !== "Todas" && event.unit_id !== coordinatorUnitFilter) return false;
+      const date = new Intl.DateTimeFormat("en-CA", {
+        timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit"
+      }).format(new Date(event.occurred_at));
+      return (!coordinatorFrom || date >= coordinatorFrom) && (!coordinatorTo || date <= coordinatorTo);
+    });
+    const opportunities = scopedLeads.filter((lead) => lead.tipo === "opportunity");
+    const inactives = scopedLeads.filter((lead) => lead.tipo === "inactive");
+    const delinquent = scopedLeads.filter((lead) => lead.tipo === "delinquent");
+    const startedLeads = new Set(scopedEvents.map((event) => event.lead_id).filter(Boolean));
+    const byUser = owners.filter((owner) => owner.role !== "admin").map((owner) => {
+      const userLeads = scopedLeads.filter((lead) => lead.ownerUserId === owner.id);
+      const userEvents = scopedEvents.filter((event) => event.actor_user_id === owner.id);
+      const userOpportunity = userLeads.filter((lead) => lead.tipo === "opportunity");
+      const converted = userOpportunity.filter((lead) => lead.status === "Convertido").length;
+      return {
+        id: owner.id, name: owner.display_name, username: owner.username,
+        portfolio: userOpportunity.length,
+        newCount: userOpportunity.filter((lead) => lead.status === "Novo").length,
+        inContact: userOpportunity.filter((lead) => lead.status === "Em contato").length,
+        interested: userOpportunity.filter((lead) => lead.status === "Interessado").length,
+        noReturn: userOpportunity.filter((lead) => lead.status === "Sem retorno").length,
+        converted,
+        attempts: userEvents.length,
+        unique: new Set(userEvents.map((event) => event.lead_id).filter(Boolean)).size,
+        conversion: userOpportunity.length ? converted / userOpportunity.length * 100 : 0
+      };
+    }).filter((user) =>
+      coordinatorOwnerFilter === "Todos" ? user.portfolio > 0 || user.attempts > 0
+        : user.id === coordinatorOwnerFilter
+    ).sort((a, b) => b.attempts - a.attempts || b.converted - a.converted);
+    return {
+      portfolio: opportunities.length,
+      newCount: opportunities.filter((lead) => lead.status === "Novo").length,
+      inContact: opportunities.filter((lead) => lead.status === "Em contato").length,
+      interested: opportunities.filter((lead) => lead.status === "Interessado").length,
+      noReturn: opportunities.filter((lead) => lead.status === "Sem retorno").length,
+      converted: opportunities.filter((lead) => lead.status === "Convertido").length,
+      reactivated: inactives.filter((lead) => lead.status === "Convertido").length,
+      inactiveTotal: inactives.length,
+      delinquentTotal: delinquent.length,
+      attempts: scopedEvents.length,
+      unique: startedLeads.size,
+      conversion: opportunities.length ? opportunities.filter((lead) => lead.status === "Convertido").length / opportunities.length * 100 : 0,
+      byUser
+    };
+  }, [leads, contactEvents, owners, coordinatorOwnerFilter, coordinatorUnitFilter, coordinatorFrom, coordinatorTo]);
+
   function changeTab(tab: DemandType) {
     setShowFilesTab(false);
     setShowActivityTab(false);
+    setShowCoordinatorTab(false);
     setActiveTab(tab);
     setOwnerFilter("Todos");
     setStatusFilter("Todos");
@@ -2337,7 +2400,7 @@ export default function DashboardPage() {
             hidden
           />
 
-          {!showFilesTab && !showActivityTab && <button
+          {!showFilesTab && !showActivityTab && !showCoordinatorTab && <button
             className={
               activeTab === "delinquent"
                 ? "delinquent-import-btn"
@@ -2366,7 +2429,7 @@ export default function DashboardPage() {
       <section className="demand-tabs" aria-label="Tipo de demanda">
         <button
           type="button"
-          className={!showFilesTab && !showActivityTab && activeTab === "opportunity" ? "demand-tab active opportunity" : "demand-tab opportunity"}
+          className={!showFilesTab && !showActivityTab && !showCoordinatorTab && activeTab === "opportunity" ? "demand-tab active opportunity" : "demand-tab opportunity"}
           onClick={() => changeTab("opportunity")}
         >
           <span>Oportunidades</span>
@@ -2375,7 +2438,7 @@ export default function DashboardPage() {
 
         <button
           type="button"
-          className={!showFilesTab && !showActivityTab && activeTab === "delinquent" ? "demand-tab active delinquent" : "demand-tab delinquent"}
+          className={!showFilesTab && !showActivityTab && !showCoordinatorTab && activeTab === "delinquent" ? "demand-tab active delinquent" : "demand-tab delinquent"}
           onClick={() => changeTab("delinquent")}
         >
           <span>Inadimplentes</span>
@@ -2384,7 +2447,7 @@ export default function DashboardPage() {
 
         <button
           type="button"
-          className={!showFilesTab && !showActivityTab && activeTab === "inactive" ? "demand-tab active inactive" : "demand-tab inactive"}
+          className={!showFilesTab && !showActivityTab && !showCoordinatorTab && activeTab === "inactive" ? "demand-tab active inactive" : "demand-tab inactive"}
           onClick={() => changeTab("inactive")}
         >
           <span>Inativos</span>
@@ -2394,7 +2457,7 @@ export default function DashboardPage() {
           <button
             type="button"
             className={showFilesTab ? "demand-tab files active" : "demand-tab files"}
-            onClick={() => { setShowFilesTab(true); setShowActivityTab(false); setNotice(""); }}
+            onClick={() => { setShowFilesTab(true); setShowActivityTab(false); setShowCoordinatorTab(false); setNotice(""); }}
           >
             <span>Gerenciar arquivos</span>
             <strong>{importedFolders.length + visibleDelinquentImports.length}</strong>
@@ -2403,14 +2466,116 @@ export default function DashboardPage() {
         <button
           type="button"
           className={showActivityTab ? "demand-tab files active" : "demand-tab files"}
-          onClick={() => { setShowActivityTab(true); setShowFilesTab(false); setNotice(""); }}
+          onClick={() => { setShowActivityTab(true); setShowFilesTab(false); setShowCoordinatorTab(false); setNotice(""); }}
         >
           <span>Atendimentos</span>
           <strong>↗</strong>
         </button>
+        {sessionInfo?.role === "admin" && (
+          <button
+            type="button"
+            className={showCoordinatorTab ? "demand-tab coordinator-tab active" : "demand-tab coordinator-tab"}
+            onClick={() => { setShowCoordinatorTab(true); setShowFilesTab(false); setShowActivityTab(false); setNotice(""); }}
+          >
+            <span>Coordenação Comercial</span>
+            <strong>◎</strong>
+          </button>
+        )}
       </section>
 
-      {showActivityTab ? (
+      {showCoordinatorTab && sessionInfo?.role === "admin" ? (
+        <section className="file-manager-page coordinator-page" aria-label="Painel da coordenação comercial">
+          <div className="file-manager-title">
+            <div>
+              <p className="eyebrow">GESTÃO DE RESULTADOS</p>
+              <h2>Coordenação Comercial</h2>
+              <p>Acompanhe a produtividade por colaborador e os status atuais das carteiras.</p>
+            </div>
+            <span className="file-manager-total">Visão gerencial</span>
+          </div>
+          <div className="coordinator-filters">
+            <label><span>Colaborador</span>
+              <select value={coordinatorOwnerFilter} onChange={(e) => setCoordinatorOwnerFilter(e.target.value)}>
+                <option value="Todos">Todos os colaboradores</option>
+                {owners.filter(owner => owner.role !== "admin").map(owner => (
+                  <option key={owner.id} value={owner.id}>{owner.display_name}</option>
+                ))}
+              </select>
+            </label>
+            <label><span>Unidade</span>
+              <select value={coordinatorUnitFilter} onChange={(e) => setCoordinatorUnitFilter(e.target.value)}>
+                <option value="Todas">Todas as unidades</option>
+                {units.map(unit => <option key={unit.id} value={unit.id}>{unit.name}</option>)}
+              </select>
+            </label>
+            <label><span>Inícios de</span><input type="date" value={coordinatorFrom} onChange={(e) => setCoordinatorFrom(e.target.value)} /></label>
+            <label><span>Inícios até</span><input type="date" min={coordinatorFrom || undefined} value={coordinatorTo} onChange={(e) => setCoordinatorTo(e.target.value)} /></label>
+          </div>
+          {contactEventsError && <p className="notice" role="alert">{contactEventsError} Os indicadores de contatos iniciados podem estar incompletos.</p>}
+          <div className="coordinator-summary">
+            <article><span>Atendimentos iniciados no Scale</span><strong>{coordinatorData.attempts.toLocaleString("pt-BR")}</strong><small>Cliques registrados no período</small></article>
+            <article><span>Contatos únicos trabalhados</span><strong>{coordinatorData.unique.toLocaleString("pt-BR")}</strong><small>Contatos distintos com início registrado</small></article>
+            <article><span>Oportunidades na carteira</span><strong>{coordinatorData.portfolio.toLocaleString("pt-BR")}</strong><small>Saldo atual, independente das datas</small></article>
+            <article><span>Convertidos</span><strong>{coordinatorData.converted.toLocaleString("pt-BR")}</strong><small>Status atual: Convertido</small></article>
+            <article><span>Taxa de conversão da carteira</span><strong>{coordinatorData.conversion.toFixed(1)}%</strong><small>Convertidos ÷ oportunidades atuais</small></article>
+            <article><span>Interessados</span><strong>{coordinatorData.interested.toLocaleString("pt-BR")}</strong><small>Status atual</small></article>
+          </div>
+          <div className="coordinator-status">
+            <h3>Distribuição atual de oportunidades</h3>
+            <div className="lead-status-overview-items">
+              {([
+                ["Novo", coordinatorData.newCount, "new"],
+                ["Em contato", coordinatorData.inContact, "contact"],
+                ["Interessado", coordinatorData.interested, "interested"],
+                ["Sem retorno", coordinatorData.noReturn, "no-return"],
+                ["Convertido", coordinatorData.converted, "converted"]
+              ] as const).map(([label, count, cls]) => (
+                <span key={label} className={`lead-status-count status-${cls}`}>
+                  <span className="lead-status-dot" aria-hidden="true" />{label}
+                  <strong>{count.toLocaleString("pt-BR")}</strong>
+                </span>
+              ))}
+            </div>
+            <p>Inativos: {coordinatorData.inactiveTotal.toLocaleString("pt-BR")} · Reativados: {coordinatorData.reactivated.toLocaleString("pt-BR")} · Inadimplentes: {coordinatorData.delinquentTotal.toLocaleString("pt-BR")}</p>
+          </div>
+          <div className="coordinator-staff">
+            <h3>Desempenho por colaborador</h3>
+            <div className="table-wrap">
+              <table className="demand-table coordinator-table">
+                <thead><tr>
+                  <th>Colaborador</th><th>Inícios no Scale</th><th>Contatos únicos</th>
+                  <th>Oportunidades</th><th>Novos</th><th>Em contato</th>
+                  <th>Interessados</th><th>Sem retorno</th><th>Convertidos</th><th>Conversão</th>
+                </tr></thead>
+                <tbody>
+                  {coordinatorData.byUser.map(user => (
+                    <tr key={user.id}>
+                      <td><strong>{user.name}</strong><small>@{user.username}</small></td>
+                      <td>{user.attempts.toLocaleString("pt-BR")}</td>
+                      <td>{user.unique.toLocaleString("pt-BR")}</td>
+                      <td>{user.portfolio.toLocaleString("pt-BR")}</td>
+                      <td>{user.newCount.toLocaleString("pt-BR")}</td>
+                      <td>{user.inContact.toLocaleString("pt-BR")}</td>
+                      <td>{user.interested.toLocaleString("pt-BR")}</td>
+                      <td>{user.noReturn.toLocaleString("pt-BR")}</td>
+                      <td>{user.converted.toLocaleString("pt-BR")}</td>
+                      <td>{user.conversion.toFixed(1)}%</td>
+                    </tr>
+                  ))}
+                  {coordinatorData.byUser.length === 0 && (
+                    <tr><td colSpan={10}>Nenhum colaborador com dados para os filtros selecionados.</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <p className="coordinator-disclaimer">
+            Os filtros de data se aplicam somente aos inícios no Scale. Os status e as conversões
+            representam a situação atual dos contatos, não o número de conversões ocorridas no período.
+            Iniciar no Scale não comprova que uma mensagem foi enviada.
+          </p>
+        </section>
+      ) : showActivityTab ? (
         <section className="file-manager-page" aria-label="Histórico de atendimentos">
           <div className="file-manager-title">
             <div>
