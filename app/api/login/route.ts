@@ -137,7 +137,8 @@ async function createLoginResponse(
     accessToken,
     role: session.role,
     displayName: session.displayName,
-    unitName: session.unitName
+    unitName: session.unitName,
+    needsPasswordChange: session.needsPasswordChange === true
   });
 
   response.cookies.set(SESSION_COOKIE, token, {
@@ -149,6 +150,21 @@ async function createLoginResponse(
   });
 
   return response;
+}
+
+async function needsPasswordSetup(userId: string): Promise<boolean> {
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!key) return false; // Existing accounts follow their unchanged login flow.
+  const response = await fetch(
+    `${SUPABASE_URL}/rest/v1/commercial_password_activation?user_id=eq.${encodeURIComponent(userId)}&select=must_change_password`,
+    { headers: { apikey:key,Authorization:`Bearer ${key}` }, cache:"no-store" }
+  );
+  if (!response.ok) {
+    // Do not break older users during a migration outage.
+    return false;
+  }
+  const rows = await response.json() as {must_change_password:boolean}[];
+  return rows[0]?.must_change_password === true;
 }
 
 function invalidCredentialsResponse() {
@@ -190,8 +206,7 @@ export async function POST(request: Request) {
     return invalidCredentialsResponse();
   }
 
-  return createLoginResponse(
-    sessionFromDbUser(dbUser),
-    dbUser.access_token
-  );
+  const session = sessionFromDbUser(dbUser);
+  session.needsPasswordChange = await needsPasswordSetup(dbUser.user_id);
+  return createLoginResponse(session, dbUser.access_token);
 }
