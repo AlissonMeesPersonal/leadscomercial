@@ -439,30 +439,24 @@ export default function AdminPage() {
 
   async function deleteUser(user: CommercialUser) {
     const confirmed = window.confirm(
-      `Excluir o usuário "${user.display_name}" (@${user.username})?\n\nO acesso será removido e o usuário deixará de aparecer no ADM. O histórico operacional e os leads serão preservados.`
+      `Excluir o usuário "${user.display_name}" (@${user.username})?\\n\\nO cadastro será arquivado para possível restauração pelo gestor Alisson. Os leads do usuário serão preservados.`
     );
-
     if (!confirmed) return;
-
     setNotice("");
-
     try {
-      await supabaseRequest("/rest/v1/rpc/commercial_admin_delete_user", {
+      const response = await fetch("/api/recovery", {
         method: "POST",
-        body: JSON.stringify({
-          p_user_id: user.id
-        })
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "delete-user", userId: user.id })
       });
-
-      setNotice(`Usuário ${user.display_name} excluído com sucesso.`);
+      const data = await response.json() as { error?: string };
+      if (!response.ok) throw new Error(data.error || "Não foi possível excluir o usuário.");
+      setNotice(`Usuário ${user.display_name} excluído e registrado no histórico.`);
       await loadData();
     } catch (err) {
-      setNotice(
-        err instanceof Error ? err.message : "Não foi possível excluir o usuário."
-      );
+      setNotice(err instanceof Error ? err.message : "Não foi possível excluir o usuário.");
     }
   }
-
   return (
     <main className="dashboard-shell admin-shell">
       <header className="topbar">
