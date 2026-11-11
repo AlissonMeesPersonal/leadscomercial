@@ -1985,82 +1985,41 @@ export default function DashboardPage() {
     if (sessionInfo.role !== "admin" && folder.ownerId !== currentOwnerId) return;
     if (sessionInfo.role !== "admin" && sessionInfo.unitId && folder.unitId !== sessionInfo.unitId) return;
 
-    const ok = window.confirm(
-      `Excluir a pasta "${folder.filename}" e seus ${folder.ids.length} registro(s)?\n\nEsta ação não poderá ser desfeita. Outras pastas não serão excluídas.`
-    );
-    if (!ok) return;
+    if (!window.confirm(
+      `Excluir "${folder.filename}" com ${folder.ids.length} registros?\\n\\nSerá criado um backup no Histórico e Restauração antes de excluir. Somente o gestor Alisson poderá restaurá-lo.`
+    )) return;
 
     deletingImportRef.current = true;
     setProcessing(true);
-    let completed = false;
     try {
-      // Confirma o conjunto existente no servidor para não operar com uma lista antiga.
-      const before = await supabaseAllRows<{
-        id: string; source: string; demand_type: DemandType;
-        owner_user_id: string | null; unit_id: string | null;
-      }>(
-        "/rest/v1/commercial_leads?select=id,source,demand_type,owner_user_id,unit_id&demand_type=eq." +
-        encodeURIComponent(folder.demandType) +
-        "&owner_user_id=eq." + encodeURIComponent(folder.ownerId) +
-        "&unit_id=" + (folder.unitId ? "eq." + encodeURIComponent(folder.unitId) : "is.null") +
-        "&order=id.asc"
-      );
-      const ids = before
-        .filter((item) => item.source.split(" • ")[0].trim() === folder.filename)
-        .map((item) => item.id);
-
-      if (!ids.length) {
-        throw new Error("Este arquivo não possui mais registros. Atualize a página para conferir.");
-      }
-      if (ids.length !== folder.ids.length) {
-        throw new Error("A pasta foi modificada por outro usuário. Atualize a página antes de excluir.");
-      }
-
-      for (let index = 0; index < ids.length; index += 75) {
-        const chunk = ids.slice(index, index + 75);
-        const response = await supabaseRequest(
-          `/rest/v1/commercial_leads?id=in.(${chunk.map(encodeURIComponent).join(",")})&demand_type=eq.${folder.demandType}&owner_user_id=eq.${encodeURIComponent(folder.ownerId)}&unit_id=${folder.unitId ? `eq.${encodeURIComponent(folder.unitId)}` : "is.null"}&select=id`,
-          { method: "DELETE", headers: { Prefer: "return=representation" } }
-        );
-        const deleted = (await response.json()) as { id: string }[];
-        if (deleted.length !== chunk.length) {
-          throw new Error("O banco não permitiu excluir todos os registros desta pasta.");
-        }
-      }
-
-      // Confere novamente no banco: só informa sucesso quando a pasta realmente sumiu.
-      const remaining = await supabaseAllRows<{ id: string; source: string }>(
-        "/rest/v1/commercial_leads?select=id,source&demand_type=eq." +
-        encodeURIComponent(folder.demandType) +
-        "&owner_user_id=eq." + encodeURIComponent(folder.ownerId) +
-        "&unit_id=" + (folder.unitId ? "eq." + encodeURIComponent(folder.unitId) : "is.null") +
-        "&order=id.asc"
-      );
-      if (remaining.some((item) => item.source.split(" • ")[0].trim() === folder.filename)) {
-        throw new Error("Ainda existem registros desta pasta no banco. A exclusão não foi concluída.");
-      }
-      completed = true;
-      setNotice(`Pasta "${folder.filename}" excluída com sucesso: ${ids.length} registro(s).`);
-    } catch (err) {
-      setNotice(
-        (err instanceof Error ? err.message : "Não foi possível excluir a pasta.") +
-        " A lista será atualizada com os dados reais do banco."
-      );
+      const response = await fetch("/api/recovery", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "delete-folder",
+          ownerUserId: folder.ownerId,
+          unitId: folder.unitId,
+          demandType: folder.demandType,
+          filename: folder.filename,
+          expectedCount: folder.ids.length
+        })
+      });
+      const result = await response.json() as { error?: string; count?: number };
+      if (!response.ok) throw new Error(result.error || "Não foi possível arquivar e excluir a pasta.");
+      setNotice(`Pasta excluída: ${result.count || folder.ids.length} registros. Backup disponível ao gestor.`);
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Não foi possível excluir a pasta.");
     } finally {
       try {
         const rows = await supabaseAllRows<DbLead>(
           "/rest/v1/commercial_leads?select=id,name,whatsapp,email,city,source,status,demand_type,owner_user_id,unit_id,created_at&order=created_at.desc,id.desc"
         );
         setLeads(rows.map(mapDbLead));
-        if (completed) {
-          const stillHasCity = rows.some(
-            (lead) => lead.demand_type === activeTab &&
-              normalizeHeader(lead.city || "").replace(/\\s+/g, " ").trim() === unitFilter.slice(5)
-          );
-          if (unitFilter.startsWith("city:") && !stillHasCity) setUnitFilter("Todas");
-        }
+        if (unitFilter.startsWith("city:") && !rows.some(row =>
+          normalizeHeader(row.city || "").replace(/\\s+/g, " ").trim() === unitFilter.slice(5)
+        )) setUnitFilter("Todas");
       } catch {
-        setNotice("Não foi possível confirmar a lista atualizada. Recarregue a página para conferir os registros.");
+        setNotice("Verifique o resultado no banco e recarregue a página.");
       }
       deletingImportRef.current = false;
       setProcessing(false);
@@ -2380,6 +2339,11 @@ export default function DashboardPage() {
           {sessionInfo?.role === "admin" && (
             <a className="ghost-btn admin-link" href="/admin">
               Usuários e unidades
+            </a>
+          )}
+          {sessionInfo?.role === "admin" && sessionInfo.username.toLowerCase() === "alisson" && (
+            <a className="ghost-btn admin-link" href="/admin/historico">
+              Histórico e restauração
             </a>
           )}
 
