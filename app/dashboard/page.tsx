@@ -2443,6 +2443,14 @@ export default function DashboardPage() {
             <strong>◎</strong>
           </a>
         )}
+        {sessionInfo?.role === "admin" && sessionInfo.username.toLowerCase() === "alisson" && (
+          <a href="/admin/historico"
+             className="demand-tab files"
+             title="Histórico e restauração de pastas e usuários excluídos">
+            <span>Histórico e restauração</span>
+            <strong>↺</strong>
+          </a>
+        )}
       </section>
 
       {showCoordinatorTab && sessionInfo?.role === "admin" ? (
