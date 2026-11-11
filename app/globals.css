@@ -4760,3 +4760,22 @@ html[data-theme="light"] .coordinator-filters input { color-scheme: light; }
 }
 .admin-access-warning p { margin: 0; line-height: 1.6; }
 .admin-access-warning button { width: auto; max-width: 100%; }
+
+
+/* Histórico e restauração (admin principal) */
+.recovery-tabs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.recovery-filters {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin: 0 0 22px;
+}
+.recovery-filters label { display: flex; flex-direction: column; gap: 7px; color: var(--muted); font-size: 13px; }
+.recovery-filters input, .recovery-filters select {
+  min-width: 0; width: 100%; box-sizing: border-box;
+  padding: 12px; border: 1px solid var(--line);
+  border-radius: 10px; background: var(--bg-soft); color: var(--text);
+  font: inherit;
+}
+@media (max-width: 850px) { .recovery-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 560px) { .recovery-filters { grid-template-columns: 1fr; } }
